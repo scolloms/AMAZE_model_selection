@@ -46,8 +46,7 @@ def get_params(df, params):
 
     return df
 
-def get_model_keys(path):
-    alpha_val = '10'
+def get_model_keys(path, channel):
     all_models = []
     models = []
     def find_submodels(name, obj):
@@ -62,12 +61,9 @@ def get_model_keys(path):
 
     # use only models with given alpha value
     for model in all_models:
-        if 'alpha' in model:
-            if 'alpha'+alpha_val in model:
-                models.append('/'+model)
-        else:
-            models.append('/' + model)
-    return(np.split(np.array(models), 5))
+        if channel in model:
+            models.append('/'+model)
+    return(np.array(models))
 
 def get_model_keys_CE(path):
     all_models = []
@@ -89,6 +85,10 @@ def get_model_keys_CE(path):
     return(np.split(np.array(models), 4))
 
 def read_hdf5(path, channel):
+    """
+    For CE channel, returns diction of submodels for all chi_b and alpha_CE values, as keys i,j in dictionary
+    For other channels, returns dictionary of submodels varying with chi_b for that channel
+    """
     if channel=='CE':
         popsynth_outputs = {}
         models = np.asarray(get_model_keys_CE(path))
@@ -97,10 +97,9 @@ def read_hdf5(path, channel):
                 popsynth_outputs[i,j]=pd.read_hdf(path, key=models[i,j])
     else:
         popsynth_outputs = {}
-        models = np.asarray(get_model_keys(path))
-        for i in range(models.shape[0]):
-            for j in range(models.shape[1]):
-                popsynth_outputs[i,j]=pd.read_hdf(path, key=models[i,j])
+        models = np.asarray(get_model_keys(path, channel))
+        for i in range(len(models)):
+            popsynth_outputs[i]=pd.read_hdf(path, key=models[i])
     return(popsynth_outputs)
 
 
