@@ -115,7 +115,7 @@ class FlowModel(Model):
 
 
     def __init__(self, label, samples, params, cosmo_weights=None, sensitivity=None, pdets=None, optimal_snrs=None,
-                 alpha=1, normalize=False, detectable=False):
+                 alpha=1, normalize=False, detectable=False, device='cpu'):
         """
         Will be passed in all data.
 
@@ -185,7 +185,8 @@ class FlowModel(Model):
         channel_samples = [1e6,864124,896611,582961, 4e6]
         no_binaries = int(channel_samples[channel_id])
 
-        flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, no_binaries, batch_size, total_hps, RNVP=False, num_bins=4)
+        flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, no_binaries, batch_size, 
+                    total_hps, RNVP=False, num_bins=4, device=device)
         self.flow = flow
 
 
@@ -367,8 +368,6 @@ class FlowModel(Model):
             raise Exception('Obs data is outside of range of samples for channel - cannot logistic map.')
 
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
-        print(np.shape(likelihoods_per_samp))
-        print(logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1]))
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
         
         # store value for multiprocessing

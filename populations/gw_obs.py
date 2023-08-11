@@ -92,7 +92,7 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
     if mesaurement_uncertainty=='delta':
         samples_shape = (len(gw_files), 1, len(params))
         samples=np.zeros(samples_shape)
-    elif mesaurement_uncertainty in ['gaussian', 'posteriors']:
+    elif mesaurement_uncertainty in ['gaussian', 'posteriors', 'test']:
         samples_shape = (len(gw_files), Nsamps, len(params))
         samples=np.zeros(samples_shape)
     else:
@@ -148,6 +148,11 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
             else:
                 sample_idxs = np.random.choice(np.arange(len(df)), size=Nsamps, replace=True)
 
+            samples[idx, :, :] = df[params].iloc[sample_idxs]
+            if prior is not None:
+                p_theta[idx, :] = df[prior].iloc[sample_idxs]
+        if mesaurement_uncertainty == 'test':
+            sample_idxs = [9,81,457]
             samples[idx, :, :] = df[params].iloc[sample_idxs]
             if prior is not None:
                 p_theta[idx, :] = df[prior].iloc[sample_idxs]
