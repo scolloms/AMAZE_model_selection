@@ -180,6 +180,16 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
+
+    x: array
+        current position of walker in parameter space. 
+        [Nhyperparameters=2] even for channels with 1 hyperparameter
+    data: array
+        GW posterior samples or mock observations
+        [Nobs x Nsample x Nparams]
+    submodels_dict: dictionary
+        stores submodels to related to their index number by keys [0 or 1][0,1,2,3,4]
+        where first is either chi_b or alpha, and the other is hyperparameter value
     """
     model_list = []
     hyperparam_idxs = []
@@ -188,8 +198,8 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         model_list.append(submodels_dict[hyper_idx][int(np.floor(x[hyper_idx]))]) #finds where walker is in hyperparam space
 
     # get detectable betas
-    betas_tmp = np.asarray(x[len(submodels_dict):])
-    betas_tmp = np.append(betas_tmp, 1-np.sum(betas_tmp))
+    betas = np.asarray(x[len(submodels_dict):])
+    betas = np.append(betas, 1-np.sum(betas))
 
     # Likelihood
     lnprob = np.zeros(data.shape[0])-np.inf
@@ -198,22 +208,26 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
     alpha = 0
 
     # Iterate over channels in this submodel, return likelihood of population model
-    #TO VECTORISE -
-    for channel, beta in zip(channels, betas_tmp):
+    #can't vectorise over this unless its a numpy array of flows, which doesn't seem like the best coding practice
+    for channel, beta in zip(channels, betas):
+
         model_list_tmp = model_list.copy()
         model_list_tmp.insert(0,channel) #list with channel, 2 hypermodels (chi_b, alpha)
+        
+        #calls popModels __call__(data) to return likelihood.
+        # add contribution from this channel
         if use_flows:
-            smdl = pop_models[channel]
+            smdl = pop_models[channels]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)])
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
         
             lnprob += logsumexp([lnprob, np.log(beta) + np.log(smdl(data))])
-        #calls popModels __call__(data) to return likelihood.
-        # add contribution from this channel
+        
+        #TO CHNAGE - needs to be alpha from specific hyperparameter mode rather than specific channel
+        #call alpha with smdl.alpha[hyperparam_idxs]
         alpha += beta * smdl.alpha
 
-    #TO CHANGE - use log likelihood throughout
     return logsumexp(lnprob-np.log(alpha))
 
 

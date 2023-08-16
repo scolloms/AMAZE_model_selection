@@ -37,15 +37,10 @@ def get_lnlikelihood(new_likelikelihoods=False):
 
 def get_llh_all_chnls(new_likelikelihoods, channels):
 
-
-    #get alphas ~~~
-
-
     likes_per_chnl = get_lnlikelihood(new_likelikelihoods)
 
-    # get detectable betas
-    betas_tmp = np.asarray() 
-    #decide on betas to test
+    #set branching franctions to test
+    betas_tmp = np.asarray([0.1,0.4,0.08,0.22])
     betas_tmp = np.append(betas_tmp, 1-np.sum(betas_tmp))
 
     # Likelihood
@@ -68,7 +63,7 @@ def test_likelihood(chnl):
     lnlikelihoods = pd.read_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/tests/likelihoods.csv')
     check_lnls = pd.DataFrame.from_dict(get_lnlikelihood())[chnl]
     print(check_lnls-lnlikelihoods[chnl])
-    #check what this number is
+    #check why its this number
     assert (check_lnls - lnlikelihoods[chnl] <= 3.552714e-15).all()
 
 #Next unit test - test that correct samples are read in for each channel
