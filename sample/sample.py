@@ -217,7 +217,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         #calls popModels __call__(data) to return likelihood.
         # add contribution from this channel
         if use_flows:
-            smdl = pop_models[channels]
+            smdl = pop_models[channel]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)])
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
