@@ -67,3 +67,28 @@ def test_likelihood(chnl):
     assert (check_lnls - lnlikelihoods[chnl] <= 3.552714e-15).all()
 
 #Next unit test - test that correct samples are read in for each channel
+
+def test_alpha(chnl):
+    #tests that alpha is calculated correctly
+    file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
+    params = ['mchirp','q', 'chieff', 'z']
+    device='cpu'
+    detectable=True
+
+    if chnl=='CE':
+        #CE channel
+        popsynth_outputs = read_models.read_hdf5(file_path, chnl)
+        sensitivity ='midhighlatelow_network'
+        alpha = np.zeros((4,5))
+
+        for chib_id in range(4):
+            for alphaCE_id in range(5):
+                samples = popsynth_outputs[(chib_id,alphaCE_id)]
+                mock_samp = samples.sample(int(1e6), weights=(samples['weight']/len(samples)), replace=True)
+                alpha[chib_id,alphaCE_id] = np.sum(mock_samp['pdet_'+sensitivity]) / len(mock_samp)
+
+        PopModel = get_models(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable)
+        alpha_model =PopModel.alpha
+
+        #reshape alpha_model into same shape array not dict
+        #find difference and assert not more than some error
