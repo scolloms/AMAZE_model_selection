@@ -218,6 +218,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         # add contribution from this channel
         if use_flows:
             smdl = pop_models[channel]
+            #TO CHECK - error here when running with multiple channels ValueError: object arrays are not supported
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)])
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
@@ -236,10 +237,10 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
     Combines the prior and likelihood to give a log posterior probability 
     at a given point
 
-    x : ?
+    x : np array
         walker points in hyperparameters space to sample probability
-    data : ?
-        GW observations
+    data : np array
+        GW observations of shape [Nobs, Nsamps, Nparams]
     kde_models : Dict
         models of KDE probabilities
     """
