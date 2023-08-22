@@ -23,13 +23,6 @@ from populations import bbh_models, gw_obs
 from sample import sample
 from plot import msplot
 
-
-"""
-l shows where you are in the code
-n run next line
-c continue code
-"""
-
 # --- Argument handling --- #
 argp = argparse.ArgumentParser()
 argp.add_argument("--file-path", type=str, required=True, help="Path to where the population models are living. Models should be stored in hdf5 format, with the channel as the base group, and model parameters as subgroups (e.g., 'CE/chi01/alpha0.5').")

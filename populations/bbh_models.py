@@ -19,33 +19,6 @@ _VALID_SPIN_DISTR = {
 }
 
 
-def get_params(df, params):
-    inference_params = pd.DataFrame()
-
-    # check if :params: in the dataframe, otherwise perform transformations
-    for param in params:
-        if param not in df.columns:
-            # default transformations
-            if param in _DEFAULT_TRANSFORMS.keys():
-                df[param] = _DEFAULT_TRANSFORMS[param](df)
-            # chieff transformations
-            elif param=='chieff':
-                df['theta1'] = _DEFAULT_TRANSFORMS['theta1'](df)
-                df['theta2'] = _DEFAULT_TRANSFORMS['theta2'](df)
-                # check if spin magnitudes have been provided
-                if not {'a1','a2'}.issubset(df.columns):
-                    if spin_distr in _VALID_SPIN_DISTR:
-                        df['a1'],df['a2'] = _VALID_SPIN_DISTR[spin_distr](df)
-                    else:
-                        raise NameError("Spin magnitudes not provided and valid spin distribution was not specified, so can't generate effective spins!")
-
-                df['chieff'] = _to_chi_eff(df)
-            # otherwise, raise an error
-            else:
-                raise NameError("You specified the parameter {0:s} for inference, but it is not in your population data and you haven't written a transformation to calculate it!".format(param))
-
-    return df
-
 def get_model_keys(path, channel):
     all_models = []
     models = []
@@ -88,6 +61,17 @@ def read_hdf5(path, channel):
     """
     For CE channel, returns diction of submodels for all chi_b and alpha_CE values, as keys i,j in dictionary
     For other channels, returns dictionary of submodels varying with chi_b for that channel
+
+    Parameters
+    ----------
+    path : list of str
+        binary parameters used for inference e.g. ['mchirp', 'q']
+    channel : str
+        string of 1 formation channel, either 'CE', 'CHE', 'GC' etc.
+    Returns
+    ----------
+    popsynth_outputs: pandas dataframe
+        dataframe of samples from models hdf5 file, of param for each submodel in One channel (function input)
     """
     if channel=='CE':
         popsynth_outputs = {}
@@ -132,16 +116,17 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
     ----------
     deepest_models : list of str
         list of submodels to get likelihood models from, in format 'CE/chi00/alpha02'
-        kde_models : dictionary of KDEs
-            dictionary of KDE models for each submodel
-        OR
-        flow_models : dictionary of flows
-            for each formation channel
+    kde_models : dictionary of KDEs
+        dictionary of KDE models for each submodel
+    OR
+    flow_models : dictionary of flows
+        for each formation channel
     """
 
     # all models should be saved in 'file_path' in a hierarchical structure, with the channel being the top group
     f = h5py.File(file_path, "r")
-    # find all the deepest models to set up dictionary
+
+    # find all the deepest models to set up dictionary for KDE models
     deepest_models = []
     def find_submodels(name, obj):
         if isinstance(obj, h5py.Dataset):
@@ -159,10 +144,7 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
                     deepest_models_cut.append(mdl)
         deepest_models = deepest_models_cut
 
-    # Save all KDE/flow models as pandas dataframes in dict structure
-
-    # TO CHANGE -- if this gets likelihood model then all the data reading in would need to be done within that class
-
+    #KDE case: reads in submodel for each of the deepest model and sends to KDEModel
     if use_flows == False:
         kde_models = {}
         #tqdm shows progress meter
@@ -184,13 +166,16 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
 
                 current_level = current_level[part]
         return deepest_models, kde_models
+
+    #Flow case: reads in samples from all channels and sends to FlowModel
     else:
         flow_models = {}
         if channels == None:
             channels = ['CE', 'CHE', 'GC', 'NSC', 'SMT']
+
         for chnl in tqdm(channels):
             popsynth_outputs = read_hdf5(file_path, chnl)
-            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device)
+            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable)
         return deepest_models, flow_models
             
 

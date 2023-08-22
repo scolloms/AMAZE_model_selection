@@ -112,7 +112,7 @@ class NFlow():
                 #sets flow optimisers gradients to zero
                 optimiser_f.zero_grad()
                 #calculate the training loss function for flow as -log_prob
-                loss_f = -self.network.log_prob(x_train, conditional=x_conditional).mean()
+                loss_f = -(xweights*self.network.log_prob(x_train, conditional=x_conditional)).mean()
                 #computes gradient of flow network parameters
                 loss_f.backward()
                 #steps optimtiser down gradient of loss surface
@@ -139,7 +139,7 @@ class NFlow():
                 #evaluate flow parameters
                 self.network.eval()
                 #calculate flow validation loss
-                val_loss_f = - self.network.log_prob(x_val, conditional=x_conditional_val).mean().numpy()
+                val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean().numpy()
                 total_val_loss=val_loss_f + val_loss_g
                 self.history['val'].append(total_val_loss)
                 self.history['valf'].append(val_loss_f)
@@ -388,12 +388,13 @@ class NFlow():
             random_samples = np.random.choice((self.total_hps-self.cond_inputs)
                     *self.no_binaries,size=(int(self.batch_size*0.8)))
             batched_hp_pairs = training_samples[random_samples,-2:]
+            batch_weights = training_samples[random_samples,-3]
         else:
             random_samples = np.random.choice(self.no_binaries,size=(int(self.batch_size*0.8)))
             batched_hp_pairs = training_samples[random_samples, -1]
+            batch_weights = training_samples[random_samples,-2]
 
         batched_samples = training_samples[random_samples,:(self.no_params)]
-        batch_weights = training_samples[random_samples,-3]
 
         #reshape tensors
         xdata=torch.from_numpy(batched_samples.astype(np.float32))
@@ -418,12 +419,13 @@ class NFlow():
         if self.cond_inputs >=2:
             random_samples = np.random.choice(self.cond_inputs*self.no_binaries, size=(int(self.batch_size*0.2)))
             validation_hp_pairs = validation_data[random_samples,-self.cond_inputs:]
+            val_weights = validation_data[random_samples,-3]
         else:
             random_samples = np.random.choice(self.no_binaries,size=(int(self.batch_size*0.2)))
             validation_hp_pairs = validation_data[random_samples,-1]
+            val_weights = validation_data[random_samples,-2]
 
         validation_samples = validation_data[random_samples,:(self.no_params)]
-        val_weights = validation_data[random_samples,-3]
 
         #reshape
         xval=torch.from_numpy(validation_samples.astype(np.float32))
