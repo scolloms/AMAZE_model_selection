@@ -370,7 +370,7 @@ class FlowModel(Model):
         posterior probability. Otherwise, the prior weights should be \
         provided as the dimemsions [samples(Nobs), samples(Nsamps)].
 
-        Returns: likelihood in shape ?
+        Returns: likelihood in shape [Nobs]
         """
         
         likelihood = np.ones(data.shape[0]) * -np.inf
@@ -396,6 +396,7 @@ class FlowModel(Model):
             raise Exception('Obs data is outside of range of samples for channel - cannot logistic map.')
 
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
+        #likelihood in shape [Nobs]
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
         
         # store value for multiprocessing

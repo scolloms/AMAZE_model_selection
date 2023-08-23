@@ -218,17 +218,21 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         # add contribution from this channel
         if use_flows:
             smdl = pop_models[channel]
-            #TO CHECK - error here when running with multiple channels ValueError: object arrays are not supported
-            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)])
+            #keep lnprob as shape [Nobs]
+            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)], axis=0)
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
         
-            lnprob += logsumexp([lnprob, np.log(beta) + np.log(smdl(data))])
+            lnprob += logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
         
-        #TO CHNAGE - needs to be alpha from specific hyperparameter mode rather than specific channel
-        #call alpha with smdl.alpha[hyperparam_idxs]
-        alpha += beta * smdl.alpha
+        #this could be done without some janky if statement but would need some rewiring of alpha
+        #check setting duplicate values of alpha in the dictionary for all orinary keys
+        if channel == 'CE':
+            alpha += beta * smdl.alpha[tuple(hyperparam_idxs)]
+        else:
+            alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
 
+    #returns lnprob summed over events
     return logsumexp(lnprob-np.log(alpha))
 
 
