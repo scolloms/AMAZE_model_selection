@@ -12,6 +12,7 @@ python model_select --file-path ${model_path} \
 		--verbose \
         --channels 'CE' 'CHE' 'GC' 'NSC' 'SMT' \
         --use-flows True \
-        --train-flows True \
         --device 'cpu' \
-        --sensitivity 'midhighlatelow_network'
+        --sensitivity 'midhighlatelow_network' \
+        --save-samples True \
+        --make-plots True

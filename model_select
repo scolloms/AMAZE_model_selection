@@ -287,9 +287,9 @@ else:
 #plot_for_paper.plot_1D_kdemodels(model_names, kde_models_detectable, params, observations, obsdata, events, model0, name=args.name, fixed_vals=fixed_vals, plot_obs=True, plot_obs_samples=False)
 #exit()
 
-#TO CHANGE LATER - plotting
+#TO CHANGE LATER - need to add function in msplot potentially for plotting 1D samples from flows
 # Plot the KDEs and observations
-if make_plots==True:
+"""if make_plots==True:
     if verbose==True:
         print("\nPlotting marginalized KDE models...")
     if len(args.model0.split('/'))>1:
@@ -299,7 +299,7 @@ if make_plots==True:
     msplot.plot_1D_kdemodels(model_names, pop_models_detectable, params, observations, obsdata, \
            model0, name=args.name, fixed_vals=fixed_vals, plot_obs=True, plot_obs_samples=False)
     if verbose:
-        print("")
+        print("")"""
 
 
 # --- Freeze sample evaluations in each model. 
@@ -460,15 +460,15 @@ if verbose:
     print("")
 
 
-"""# Plot samples and histograms of betas per model
+# Plot samples and histograms of betas per model
 if make_plots==True:
     if verbose:
         print("Plotting samples...\n")
     for hyper_idx in list(submodels_dict.keys()):
         # Need samples back in their original shape (separated by chains)
         msplot.plot_samples(samples.reshape(original_shape), submodels_dict, model_names, channels, model0, name=args.name, hyper_idx=hyper_idx, detectable_beta=False)
-        msplot.plot_samples(detectable_samples.reshape(original_shape), submodels_dict, model_names, channels, model0, name=args.name, hyper_idx=hyper_idx, detectable_beta=True)
-"""
+        #msplot.plot_samples(detectable_samples.reshape(original_shape), submodels_dict, model_names, channels, model0, name=args.name, hyper_idx=hyper_idx, detectable_beta=True)
+
 
 # --- Save samples
 
