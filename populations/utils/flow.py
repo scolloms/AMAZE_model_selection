@@ -93,8 +93,7 @@ class NFlow():
         best_model_f = copy.deepcopy(self.network.state_dict())
 
         #record network values and outputs in dictionary as training
-        self.history = {'train': [], 'val': [], 'kl': [], 'lr':[], 'traing':[], 'valg':[], 'trainf':[], 'valf':[],
-                         'avemeans':[],'avelogstds':[]}
+        self.history = {'train': [], 'val': [], 'kl': [], 'lr':[]}
 
         #training loop
         for n in range(n_epochs): 
@@ -126,8 +125,6 @@ class NFlow():
             trainlossf /= n_batches
             trainlossg /= n_batches
             self.history['train'].append(train_loss)
-            self.history['trainf'].append(trainlossf)
-            self.history['traing'].append(trainlossg)
             
             # Validate
             with torch.no_grad(): #disables gradient caluclation
@@ -141,9 +138,7 @@ class NFlow():
                 #calculate flow validation loss
                 val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean().numpy()
                 total_val_loss=val_loss_f + val_loss_g
-                self.history['val'].append(total_val_loss)
-                self.history['valf'].append(val_loss_f)
-                self.history['valg'].append(val_loss_g) #save the loss value of the training data
+                self.history['val'].append(total_val_loss)#save the loss value of the training data
 
             #calculate average KL over all params (in latent space with KDEs)
             self.KDE_points, KL_vals = self.latent_KL(x_val,x_conditional_val, self.no_params)
@@ -316,7 +311,7 @@ class NFlow():
         plt.legend(loc = 'best')
         plt.show()
 
-        pd.DataFrame.to_csv(self.history,f'{filename}_means.csv')
+        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_means.csv')
 
     def get_samples(self, no_samples, hyperparameters):
         """
