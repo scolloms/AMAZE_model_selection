@@ -21,7 +21,7 @@ _likelihood = 'emcee_lnlike'
 _posterior = 'emcee_lnpost'
 
 _nwalkers = 16
-_nsteps = 10
+_nsteps = 1000
 _fburnin = 0.2
 
 """
@@ -200,6 +200,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
     # get detectable betas
     betas = np.asarray(x[len(submodels_dict):])
     betas = np.append(betas, 1-np.sum(betas))
+    print(betas)
 
     # Likelihood
     lnprob = np.zeros(data.shape[0])-np.inf
@@ -220,17 +221,18 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
             smdl = pop_models[channel]
             #keep lnprob as shape [Nobs]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)], axis=0)
+            #this could be done without some janky if statement but would need some rewiring of alpha
+            #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
+            if channel == 'CE':
+                alpha += beta * smdl.alpha[tuple(hyperparam_idxs)]
+            else:
+                alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
         else:
+            print(model_list_tmp)
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
-        
             lnprob += logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
+            alpha += beta * smdl.alpha
         
-        #this could be done without some janky if statement but would need some rewiring of alpha
-        #check setting duplicate values of alpha in the dictionary for all orinary keys
-        if channel == 'CE':
-            alpha += beta * smdl.alpha[tuple(hyperparam_idxs)]
-        else:
-            alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
 
     #returns lnprob summed over events
     return logsumexp(lnprob-np.log(alpha))
