@@ -67,6 +67,7 @@ else:
 verbose=args.verbose
 make_plots=args.make_plots
 use_flows=args.use_flows
+
 # see if we're using GW observations
 gwobs = True if args.model0=='gwobs' else False
 
@@ -80,7 +81,9 @@ def setInDict(dataDict, mapList, value):
 # Construct both "underlying" KDE models (anything that has Pdet>0) and "detectable" KDE models
 # `normalize` argument normalizes KDEs on unit cube
 params = list(np.asarray(args.params).flatten())
-if use_flows:
+if use_flows==True:
+    if verbose:
+        print("\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
     model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, use_flows=use_flows,detectable=False, device=args.device)
     #TO CHANGE - add detectable models?
     model_names.sort()
@@ -90,12 +93,11 @@ else:
     if verbose:
         print("\nReading models, applying transformations, and initializing underlying KDEs...\n")
     model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, use_flows=use_flows,detectable=False)
-    if verbose:
-        print("\nReading models, applying transformations, and initializing detectable KDEs...\n")
-    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=True)
+    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, use_flows=use_flows, detectable=True)
     model_names.sort()
     hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
     Nhyper = np.max([len(x.split('/')) for x in hyperparams])
+    print(hyperparams, Nhyper)
 
 
 # check that betas are provided if gwobs not specified, check betas, and sort channels and betas consistently
@@ -308,7 +310,7 @@ else:
 # observation values aren't going to change. 
 # Lower the number of samples per observation to speed this up.
 
-if use_flows:
+if use_flows==False:
     for channel in channels:
         if args.train_flows == True:
             pop_models[channel].train(args.lr, args.epochs, args.batch_no, args.flow_model_filename, channel)
@@ -324,6 +326,7 @@ else:
     if verbose:
         print("Done freezing KDE evaluations of observations!\n")
 
+#TO CHECK - check for flows that this isn't copying models 
 # ---  Copy kde_models so that they all have the same levels of hyperparameters
 all_models_at_deepest = all([len(x.split('/')[1:])==Nhyper for x in model_names])
 while all_models_at_deepest==False:
@@ -354,7 +357,6 @@ while all_models_at_deepest==False:
 
 
 # --- Do the sampling!
-#TO CHANGE - sample with Flows instead
 sampler = sample.Sampler(model_names)
 sampler.sample(pop_models, obsdata, use_flows, verbose=verbose)
 samples = sampler.samples
@@ -509,8 +511,9 @@ if args.save_samples:
 
     # save observations as dataframe
     df = pd.DataFrame()
-    for idx, obs in enumerate(obsdata):
-        df = df.append(pd.DataFrame(obs, columns=params, index=(idx*np.ones(len(obs)).astype(int))))
+    saved_obs_idxs = np.repeat(np.arange(obsdata.shape[0]), obsdata.shape[1])
+    saved_obs = np.reshape(obsdata, (-1,len(params)))
+    df = pd.DataFrame(saved_obs, columns=params, index=saved_obs_idxs)
     df.to_hdf(fname, key='model_selection/obsdata')
 
     # save samples as dataframe
