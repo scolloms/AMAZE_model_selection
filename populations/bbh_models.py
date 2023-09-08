@@ -145,7 +145,17 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
         deepest_models = deepest_models_cut
 
     #KDE case: reads in submodel for each of the deepest model and sends to KDEModel
-    if use_flows == False:
+    #Flow case: reads in samples from all channels and sends to FlowModel
+    if use_flows==True:
+        flow_models = {}
+        if channels == None:
+            channels = ['CE', 'CHE', 'GC', 'NSC', 'SMT']
+
+        for chnl in tqdm(channels):
+            popsynth_outputs = read_hdf5(file_path, chnl)
+            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable)
+        return deepest_models, flow_models
+    else:
         kde_models = {}
         #tqdm shows progress meter
         for smdl in tqdm(deepest_models):
@@ -166,16 +176,5 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
 
                 current_level = current_level[part]
         return deepest_models, kde_models
-
-    #Flow case: reads in samples from all channels and sends to FlowModel
-    else:
-        flow_models = {}
-        if channels == None:
-            channels = ['CE', 'CHE', 'GC', 'NSC', 'SMT']
-
-        for chnl in tqdm(channels):
-            popsynth_outputs = read_hdf5(file_path, chnl)
-            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable)
-        return deepest_models, flow_models
             
 
