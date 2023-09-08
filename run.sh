@@ -1,5 +1,6 @@
 #! /bin/bash
-#runs model select with GPU specified in bach call, flows, and preset file paths, CE channel only
+#runs model_select with GPU specified in bash call, flows, and preset file paths. all channels
+#for paths on local directory
 
 model_path="/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5"
 gw_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events"
@@ -11,8 +12,9 @@ python model_select --file-path ${model_path} \
         --flow-model-filename ${flow_path} \
 		--verbose \
         --channels 'CE' 'CHE' 'GC' 'NSC' 'SMT' \
-        --use-flows True \
         --device 'cpu' \
         --sensitivity 'midhighlatelow_network' \
-        --save-samples True \
-        --make-plots True
+        --save-samples \
+        --make-plots \
+        --name 'KDE_testrun'
+
