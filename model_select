@@ -27,7 +27,7 @@ from plot import msplot
 argp = argparse.ArgumentParser()
 argp.add_argument("--file-path", type=str, required=True, help="Path to where the population models are living. Models should be stored in hdf5 format, with the channel as the base group, and model parameters as subgroups (e.g., 'CE/chi01/alpha0.5').")
 argp.add_argument("--model0", type=str, required=True, help="Sets the 'true' model from which mock observations are drawn. When there are multiple parameters in the submodel, separate with '/' (e.g., 'chi00/alpha5'). If 'gwobs', will use the actual GW observations.")
-argp.add_argument("--use-flows", type=bool, help="True if using normalising flows to estimate hyperlikelihoods in inference. Otherwise use KDEs. Default=True")
+argp.add_argument("--use-flows", action="store_true", help="True if using normalising flows to estimate hyperlikelihoods in inference. Otherwise use KDEs. Default=False.")
 argp.add_argument("--gw-path", type=str, help="Sets the path for where the GW samples are living. Necessary if model0='gwobs'. Default=None.")
 argp.add_argument("--prior", type=str, help="Sets the key for the prior weights of each GW sample. This is used to calculate p(theta), which we use to divide out the prior in the heirarchical inference. Default=None.")
 argp.add_argument("--channels", nargs="+", help="Specifies the formation channels you wish to consider in the inference. If gwobs not being used, must have the same length as the number of betas provided. If 'None', will use all channels in the hdf5 file in alphabetical order. Note that the order of betas will be interpretted in the same order as channels. Default=None.")
@@ -310,7 +310,9 @@ else:
 # observation values aren't going to change. 
 # Lower the number of samples per observation to speed this up.
 
-if use_flows==False:
+if use_flows==True:
+    if verbose:
+        print('Training/Loading flows')
     for channel in channels:
         if args.train_flows == True:
             pop_models[channel].train(args.lr, args.epochs, args.batch_no, args.flow_model_filename, channel)
@@ -334,16 +336,16 @@ while all_models_at_deepest==False:
     for model in model_names:
         # See number of hyperparameters in model, subtract one for channel
         Nhyper_in_model = len(model.split('/'))-1
-        if not use_flows:
+        if use_flows==False:
             kde_hold = getFromDict(pop_models, model.split('/'))
         # loop until this model has all the hyperparam levels as well
         while Nhyper_in_model < Nhyper:
-            if not use_flows:
+            if use_flows==False:
                 # remove kde model from old level
                 setInDict(pop_models, model.split('/'), {})
             model_names.remove(model)
             for new_hyperparam in hyperparam_dict[Nhyper_in_model]:
-                if not use_flows:
+                if use_flows==False:
                     # copy the same kde model for the higher hyperparam level
                     new_kde = deepcopy(kde_hold)
                     new_level = model.split('/') + [new_hyperparam]

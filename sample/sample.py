@@ -99,7 +99,7 @@ posteriors!".format(self.posterior_name))
         self.fburnin = kwargs['fburnin'] if 'fburnin' in kwargs else _fburnin
 
     #still input flow dictionary
-    def sample(self, pop_models, obsdata, use_flows=False, verbose=True):
+    def sample(self, pop_models, obsdata, use_flows, verbose=True):
         """
         Initialize and run the sampler
         """
@@ -217,7 +217,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         
         #calls popModels __call__(data) to return likelihood.
         # add contribution from this channel
-        if use_flows:
+        if use_flows==True:
             smdl = pop_models[channel]
             #keep lnprob as shape [Nobs]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)], axis=0)
