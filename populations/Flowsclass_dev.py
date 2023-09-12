@@ -50,9 +50,6 @@ class Model(object):
     def __call__(self, data):
         return None
 
-    #Needs functions such as:
-    #setting branching fractions/chi_b/alpha
-    #
 
 class FlowModel(Model):
     @staticmethod

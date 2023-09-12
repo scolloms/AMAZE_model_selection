@@ -21,7 +21,7 @@ _likelihood = 'emcee_lnlike'
 _posterior = 'emcee_lnpost'
 
 _nwalkers = 16
-_nsteps = 1000
+_nsteps = 10000
 _fburnin = 0.2
 
 """
@@ -228,7 +228,6 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
             else:
                 alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
         else:
-            print(model_list_tmp)
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob += logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
             alpha += beta * smdl.alpha
