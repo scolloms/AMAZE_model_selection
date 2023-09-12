@@ -6,16 +6,13 @@ model_path="/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/mode
 gw_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events"
 flow_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/flow_models/cosmo_weights/"
 
-python model_select --file-path ${model_path} \
+python ../../model_select --file-path ${model_path} \
         --model0 'gwobs' \
         --gw-path ${gw_path} \
-        --flow-model-filename ${flow_path} \
-        --use-flows \
 		--verbose \
-        --channels 'CE' 'CHE' 'GC' 'NSC' 'SMT' \
-        --device 'cpu' \
+        --param 'mchirp' 'q' 'chieff' 'z' \
         --sensitivity 'midhighlatelow_network' \
         --save-samples \
         --make-plots \
-        --name 'KDE_testrun'
+        --uncertainty 'delta'
 
