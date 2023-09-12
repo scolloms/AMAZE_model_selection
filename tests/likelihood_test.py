@@ -11,7 +11,7 @@ from populations.utils.flow import NFlow
 from populations.Flowsclass_dev import FlowModel
 from populations import gw_obs
 
-def get_lnlikelihood(new_likelikelihoods=False):
+def get_lnlikelihood(new_lnlikelihoods=False):
     #set posterior indxs here?
     params = ['mchirp','q', 'chieff', 'z']
     file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
@@ -30,14 +30,14 @@ def get_lnlikelihood(new_likelikelihoods=False):
         conditional_idxs =[3,1]
         lnlikelihood[chnl] = flows[chnl](obsdata,conditional_idxs)
 
-    if new_likelikelihoods:
+    if new_lnlikelihoods:
         lnl_df=pd.DataFrame.from_dict(lnlikelihood)
         lnl_df.to_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/tests/likelihoods.csv')
     return lnlikelihood
 
-def get_llh_all_chnls(new_likelikelihoods, channels):
+def get_llh_all_chnls(new_lnlikelihoods, channels):
 
-    likes_per_chnl = get_lnlikelihood(new_likelikelihoods)
+    likes_per_chnl = get_lnlikelihood(new_lnlikelihoods)
 
     #set branching franctions to test
     betas_tmp = np.asarray([0.1,0.4,0.08,0.22])
@@ -67,28 +67,3 @@ def test_likelihood(chnl):
     assert (check_lnls - lnlikelihoods[chnl] <= 3.552714e-15).all()
 
 #Next unit test - test that correct samples are read in for each channel
-
-def test_alpha(chnl):
-    #tests that alpha is calculated correctly
-    file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
-    params = ['mchirp','q', 'chieff', 'z']
-    device='cpu'
-    detectable=True
-
-    if chnl=='CE':
-        #CE channel
-        popsynth_outputs = read_models.read_hdf5(file_path, chnl)
-        sensitivity ='midhighlatelow_network'
-        alpha = np.zeros((4,5))
-
-        for chib_id in range(4):
-            for alphaCE_id in range(5):
-                samples = popsynth_outputs[(chib_id,alphaCE_id)]
-                mock_samp = samples.sample(int(1e6), weights=(samples['weight']/len(samples)), replace=True)
-                alpha[chib_id,alphaCE_id] = np.sum(mock_samp['pdet_'+sensitivity]) / len(mock_samp)
-
-        PopModel = get_models(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable)
-        alpha_model =PopModel.alpha
-
-        #reshape alpha_model into same shape array not dict
-        #find difference and assert not more than some error
