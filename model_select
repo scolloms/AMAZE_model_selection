@@ -30,9 +30,9 @@ argp.add_argument("--model0", type=str, required=True, help="Sets the 'true' mod
 argp.add_argument("--use-flows", action="store_true", help="True if using normalising flows to estimate hyperlikelihoods in inference. Otherwise use KDEs. Default=False.")
 argp.add_argument("--gw-path", type=str, help="Sets the path for where the GW samples are living. Necessary if model0='gwobs'. Default=None.")
 argp.add_argument("--prior", type=str, help="Sets the key for the prior weights of each GW sample. This is used to calculate p(theta), which we use to divide out the prior in the heirarchical inference. Default=None.")
-argp.add_argument("--channels", nargs="+", help="Specifies the formation channels you wish to consider in the inference. If gwobs not being used, must have the same length as the number of betas provided. If 'None', will use all channels in the hdf5 file in alphabetical order. Note that the order of betas will be interpretted in the same order as channels. Default=None.")
+argp.add_argument("--channels", nargs="+", default=['CE', 'CHE', 'GC', 'NSC', 'SMT'], help="Specifies the formation channels you wish to consider in the inference. If gwobs not being used, must have the same length as the number of betas provided. Note that the order of betas will be interpretted in the same order as channels. Default=['CE', 'CHE', 'GC', 'NSC', 'SMT'].")
 argp.add_argument("--betas", nargs="*", help="Sets the branching fraction for mock observations. The number provided is the fraction of systems that come from each channel in alphabetical order. Must be set if gwobs not used. Can provide Nchannel values (which must sum to unity) or Nchannel-1 values (which must be less than 1.0, and the last branching fraction is inferred). Default=None.")
-argp.add_argument("--params", nargs="+", default=['mchirp', 'q', 'chieff', 'z'], help="Specifies the parameters you wish to use in the inference. Default=mchirp.")
+argp.add_argument("--params", nargs="+", default=['mchirp', 'q', 'chieff', 'z'], help="Specifies the parameters you wish to use in the inference. Default=['mchirp', 'q', 'chieff', 'z'].")
 argp.add_argument("--Nobs", type=int, help="Number of mock observations to be taken from the mixture model. Must be set if gwobs not used. Default=None.")
 argp.add_argument("--Nsamps", type=int, default=100, help="Number of samples to be drawn from the posterior distributions and used for inference. Default=100.")
 argp.add_argument("--sensitivity", type=str, help="Name of desired interferometer sensitivity. Should be consistent with the string following the `pdet` and `snropt` columns in the population dataframes. This is used to construct a detection-weighted kde, as well as for drawing samples from the underlying distributions. By default, these weights have the same name as the network sensitivity from the LVC Observing Scenarios, and have '_network' appended if using a 3-detector configuration. Default=None.")
@@ -57,6 +57,8 @@ argp.add_argument("--device", type=str, default='cpu', help="Device to run model
 
 args = argp.parse_args()
 
+print(args.channels)
+
 # --- Set random seed
 if args.random_seed:
     np.random.seed(args.random_seed)
@@ -67,6 +69,7 @@ else:
 verbose=args.verbose
 make_plots=args.make_plots
 use_flows=args.use_flows
+print(use_flows)
 
 # see if we're using GW observations
 gwobs = True if args.model0=='gwobs' else False
@@ -84,7 +87,7 @@ params = list(np.asarray(args.params).flatten())
 if use_flows==True:
     if verbose:
         print("\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, use_flows=use_flows,detectable=False, device=args.device)
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, device=args.device)
     #TO CHANGE - add detectable models?
     model_names.sort()
     hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
@@ -92,8 +95,8 @@ if use_flows==True:
 else:
     if verbose:
         print("\nReading models, applying transformations, and initializing underlying KDEs...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, use_flows=use_flows,detectable=False)
-    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, use_flows=use_flows, detectable=True)
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False)
+    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=True)
     model_names.sort()
     hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
     Nhyper = np.max([len(x.split('/')) for x in hyperparams])
@@ -328,7 +331,6 @@ else:
     if verbose:
         print("Done freezing KDE evaluations of observations!\n")
 
-#TO CHECK - check for flows that this isn't copying models 
 # ---  Copy kde_models so that they all have the same levels of hyperparameters
 all_models_at_deepest = all([len(x.split('/')[1:])==Nhyper for x in model_names])
 while all_models_at_deepest==False:

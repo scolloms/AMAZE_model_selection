@@ -87,7 +87,7 @@ def read_hdf5(path, channel):
     return(popsynth_outputs)
 
 
-def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, normalize=False, detectable=False, use_flows=True, device='cpu', **kwargs):
+def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitivity=None, normalize=False, detectable=False, device='cpu', **kwargs):
     """
     Call this to get all the models and submodels, as well
     as KDEs of these models, packed inside of dictionaries labelled in the
@@ -148,9 +148,6 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
     #Flow case: reads in samples from all channels and sends to FlowModel
     if use_flows==True:
         flow_models = {}
-        if channels == None:
-            channels = ['CE', 'CHE', 'GC', 'NSC', 'SMT']
-
         for chnl in tqdm(channels):
             popsynth_outputs = read_hdf5(file_path, chnl)
             flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable)
@@ -167,8 +164,6 @@ def get_models(file_path, channels, params, spin_distr=None, sensitivity=None, n
                         # if we are on the last level, read in data and store kdes
                         df = pd.read_hdf(file_path, key=smdl)
                         label = '/'.join(smdl_list)
-                        print('label')
-                        print(label)
                         mdl = KDEModel.from_samples(label, df, params, sensitivity=sensitivity, normalize=normalize, detectable=detectable)
                         current_level[part] = mdl
                     else:
