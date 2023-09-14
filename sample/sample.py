@@ -127,7 +127,6 @@ posteriors!".format(self.posterior_name))
         
         for idx, result in enumerate(sampler.sample(p0, iterations=self.nsteps)): #running sampler
             if verbose:
-                print(idx)
                 if (idx+1) % (self.nsteps/200) == 0:#progress bar
                     sys.stderr.write("\r  {0}% (N={1})".\
                                 format(float(idx+1)*100. / self.nsteps, idx+1))
@@ -200,10 +199,10 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
     # get detectable betas
     betas = np.asarray(x[len(submodels_dict):])
     betas = np.append(betas, 1-np.sum(betas))
-    print(betas)
 
     # Likelihood
     lnprob = np.zeros(data.shape[0])-np.inf
+    prob = np.zeros(data.shape[0])
 
     # Detection effiency for this hypermodel
     alpha = 0
@@ -229,12 +228,12 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
                 alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
-            lnprob += logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
+            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
+            prob += beta * smdl(data)
             alpha += beta * smdl.alpha
-        
 
     #returns lnprob summed over events
-    return logsumexp(lnprob-np.log(alpha))
+    return (lnprob-np.log(alpha)).sum()
 
 
 def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows):
