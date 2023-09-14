@@ -19,18 +19,11 @@ from scipy.special import logsumexp
 from scipy.special import expit
 from .utils.selection_effects import projection_factor_Dominik2015_interp, _PSD_defaults
 from .utils.flow import NFlow
-from .utils.transform import mchirpq_to_m1m2, mtotq_to_m1m2, mtoteta_to_m1m2, chieff_to_s1s2, mtotq_to_mc, mtoteta_to_mchirpq, eta_to_q
 
 from astropy import cosmology
 from astropy.cosmology import z_at_value
 import astropy.units as u
 cosmo = cosmology.Planck18
-
-# Need to ensure all parameters are normalized over the same range
-_param_bounds = {"mchirp": (0,100), "q": (0,1), "chieff": (-1,1), "z": (0,10)}
-_posterior_sigmas = {"mchirp": 1.512, "q": 0.166, "chieff": 0.1043, "z": 0.0463}
-_snrscale_sigmas = {"mchirp": 0.04, "eta": 0.03, "chieff": 0.14}
-_maxsamps = int(1e5)
 
 # Get the interpolation function for the projection factor in Dominik+2015
 # which takes in a random number and spits out a projection factor 'w'
@@ -53,7 +46,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu'):
+    def from_samples(channel, samples, params, sensitivity, normalize, detectable, device):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -67,10 +60,23 @@ class FlowModel(Model):
         channel : str
             channel label of form 'CE'
         samples : Dataframe
-            binary samples from population synthesis.
-            for all params (KDEs)
+            samples from population synthesis.
+            contains all binary parameters in 'params' array, cosmo_weights, pdet weights, optimal snrs
         params : list of str
             subset of mchirp, q, chieff, z
+        sensitivity : str
+            Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
+            Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
+        normalize : bool
+            state of normalisation, used in sampling for the KDE model, but defunt here.
+        detectable : bool
+            whether or not to construct a detection weighted flow model
+        deivce : str
+            Device on which to run the flow. default is 'cpu', otherwise choose 'cuda:X' where X is the GPU slot.
+        
+        Returns
+        ----------
+        FlowModel : obj
         """
 
         return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device)
@@ -85,12 +91,19 @@ class FlowModel(Model):
         label : str
             channel label of form 'CE'
         samples : Dataframe
-            binary samples from population synthesis.
-            for all params
+            samples from population synthesis.
+            contains all binary parameters in 'params' array, cosmo_weights, pdet weights, optimal snrs
         params : list of str
-            subset of mchirp, q, chieff, z
-        cosmo_weights=None, sensitivity=None, pdets=None, optimal_snrs=None,
-        alpha=1, normalize=False, detectable=False, device='cpu'
+            subset of [mchirp, q, chieff, z]
+        sensitivity : str
+            Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
+            Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
+        normalize : bool
+            state of normalisation, used in sampling for the KDE model, but defunt here.
+        detectable : bool
+            whether or not to construct a detection weighted flow model
+        deivce : str
+            Device on which to run the flow. default is 'cpu', otherwise choose 'cuda:X' where X is the GPU slot.
         """
         
         super()
@@ -101,27 +114,32 @@ class FlowModel(Model):
         self.normalize = normalize
         self.detectable = detectable
 
-        #population hyperparams
+        #initialises list of population hyperparameter values
         self.hps = [[0.,0.1,0.2,0.5]]
+
+        #additional alpha dimension for CE channel, else dummy dimension
         if label=='CE':
             self.hps.append([0.2,0.5,1.,2.,5.])
         else:
             self.hps.append([1])
-
+        
+        #number of binary parameters
         self.no_params = np.shape(params)[0]
+        #dimensionailty of non-branching ratio hyperparameters
         self.conditionals = 2 if self.channel_label =='CE' else 1
 
-        #initialise dictionaries of alpha, cosmo_weights, pdet, optimal_snrs, and combined_weights
+        #initialise dictionaries of alpha, cosmo_weights, pdet, optimal_snrs, and combined_weights for each submodel
         alpha = dict.fromkeys(samples.keys())
         cosmo_weights= dict.fromkeys(samples.keys())
         pdets= dict.fromkeys(samples.keys())
         optimal_snrs= dict.fromkeys(samples.keys())
         combined_weights= dict.fromkeys(samples.keys())
 
+        #loop over submodels
         for chib_id, chib in enumerate(self.hps[0]):
             for alphaid, alphaCE in enumerate(self.hps[1]):
 
-                #grab samples for each submodel depending on how many submodels there are in each channel
+                #grab samples for each submodel depending on how many hyperparameter dimensions there are (CE vs non-CE)
                 if label=='CE':
                     sbml_samps = samples[chib_id,alphaid]
                     key = chib_id,alphaid
@@ -129,6 +147,7 @@ class FlowModel(Model):
                     sbml_samps = samples[chib_id]
                     key= chib_id
 
+                #check that defined sensitivity exists in submodel dataframe
                 if sensitivity is not None:
                     if 'pdet_'+sensitivity not in sbml_samps.columns:
                         raise ValueError("{0:s} was specified for your detection weights, but cannot find this column in the samples datafarme!")
@@ -177,17 +196,14 @@ class FlowModel(Model):
                     combined_weights[key] = cosmo_weights[key]
                 combined_weights[key] /= np.sum(combined_weights[key])
 
+        #sets weights as class properties
         self.combined_weights = combined_weights
         self.pdets = pdets
         self.optimal_snrs = optimal_snrs
         self.alpha = alpha
         self.cosmo_weights = cosmo_weights
-
-        # Gets the KDE objects, specify function for pdf
-        # This custom KDE handles multiple dimensions, bounds, and weights, and takes in samples (Ndim x Nsamps)
-        # By default, the detection-weighted KDE and underlying KDE (for samples that have Pdet>0)  are saved
         
-        #flow parameters
+        #flow network parameters
         self.no_trans = 6
         self.no_neurons = 128
         batch_size=10000
@@ -195,17 +211,19 @@ class FlowModel(Model):
 
         channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
         channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
+
         #number of data points (total) for each channel
         #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
         channel_samples = [1e6,864124,896611,582961, 4e6]
-        no_binaries = int(channel_samples[channel_id])
+        self.no_binaries = int(channel_samples[channel_id])
 
-        flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, no_binaries, batch_size, 
+        #initislises network
+        flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
                     total_hps, RNVP=False, num_bins=4, device=device)
         self.flow = flow
 
 
-    def map_samples(self, samples, params, filepath, channel):
+    def map_samples(self, samples, params, filepath):
         """
         Maps samples with logistic mapping (mchirp, q, z samples) and tanh (chieff).
         Stacks data by [mchirp,q,chieff,z,weight,chi_b,(alpha)].
@@ -218,10 +236,10 @@ class FlowModel(Model):
             ['mchirp', 'q', 'chieff', 'z', 'm1' 'm2' 's1x' 's1y' 's1z' 's2x' 's2y' 's2z'
             'weight' 'pdet_midhighlatelow_network' 'snropt_midhighlatelow_network'
             'pdet_midhighlatelow' 'snropt_midhighlatelow']
-        channel_lable : str
-            corresponds to {'CE', 'CHE','GC','NSC', 'SMT'}
         params : list of str
             list of parameters to be used for inference, typically ['mchirp', 'q', 'chieff', 'z']
+        filepath : str
+            the filepath to the flow models and mappings to be loaded/saved
         
         Returns
         -------
@@ -235,35 +253,30 @@ class FlowModel(Model):
         mappings : array
             constants used to map the mchirp, q, and z distributions.
         """
+
         if self.verbose:
             print('Mapping population synthesis samples for training...')
         
         channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
         channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
-        #number of data points (total) for each channel
-        
-        channel_samples = [1e6,864124,896611,582961, 4e6]
-        no_binaries = int(channel_samples[channel_id])
 
         if self.channel_label != 'CE':
             #Channels with 1D hyperparameters: SMT, GC, NSC, CHE
 
-            #put data from required parameters for all alphas and chi_bs into model_stack
-            models = np.zeros((no_binaries, self.no_params))
-            weights = np.zeros((no_binaries))
+            #put samples from binary parameters for all chi_bs into model_stack
+            models = np.zeros((self.no_binaries, self.no_params))
+            weights = np.zeros((self.no_binaries))
             model_size = np.zeros(self.no_params)
             cumulsize = np.zeros(self.no_params)
 
-            #stack data
             for chib_id, xb in enumerate(self.hps[0]):
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
-                models[int(cumulsize[chib_id-1]):int(np.sum(model_size))]=np.asarray(samples[(chib_id)][params])
-                weights[int(cumulsize[chib_id-1]):int(np.sum(model_size))]=np.asarray(self.combined_weights[(chib_id)])
-
+                models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
+                weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
                 models_stack = np.copy(models)
 
-            #logit and renormalise distributions pre-batching
+            #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True)
             if channel_id == 2: 
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
@@ -273,6 +286,7 @@ class FlowModel(Model):
             models_stack[:,2] = np.arctanh(models_stack[:,2])
             models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3], True)
 
+            #TO CHANGE: divide up validation and training data properly
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,1))
             validation_hps_stack = np.reshape(training_hps_stack,(-1,1))
@@ -285,8 +299,8 @@ class FlowModel(Model):
             #CE channel with alpha parameter treatment
 
             #put data from required parameters for all alphas and chi_bs into model_stack
-            models = np.zeros((4,5,no_binaries, self.no_params))
-            weights = np.zeros((4,5,no_binaries))
+            models = np.zeros((4,5,self.no_binaries, self.no_params))
+            weights = np.zeros((4,5,self.no_binaries))
             removed_model_id =[7,11]
             val_hps = [[0.1,1],[0.2,.5]]
 
@@ -296,9 +310,9 @@ class FlowModel(Model):
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
 
             training_hp_pairs = np.delete(chi_b_alpha_pairs, removed_model_id, 0) #removes [0.1,1] and [0.2,0.5] point
-            training_hps_stack = np.repeat(training_hp_pairs, no_binaries, axis=0) #repeats to cover all samples in each population
-            validation_hps_stack = np.repeat(val_hps, no_binaries, axis=0)
-            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, no_binaries, axis=0)
+            training_hps_stack = np.repeat(training_hp_pairs, self.no_binaries, axis=0) #repeats to cover all samples in each population
+            validation_hps_stack = np.repeat(val_hps, self.no_binaries, axis=0)
+            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, self.no_binaries, axis=0)
 
             #stack data
             for chib_id in range(4):
@@ -311,7 +325,7 @@ class FlowModel(Model):
             joined_chib_weights = np.concatenate(weights, axis=0)
             models_stack = np.concatenate(joined_chib_samples, axis=0) #all models if needed
 
-            #logit and renormalise distributions pre-batching
+            #map samples before dividing into training and validation data
 
             #TO CHANGE - needs to account for different sets of parameters
             #chirp mass original range 0 to inf
@@ -340,34 +354,45 @@ class FlowModel(Model):
         validation_weights = np.reshape(validation_weights,(-1,1))
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
+
+        #save mapping constants
         mappings = np.asarray([max_logit_mchirp, max_mchirp, max_q, None, max_logit_z, max_z])
-        np.save(f'{filepath}{channel}_mappings.npy',mappings)
+        np.save(f'{filepath}{self.channel_label}_mappings.npy',mappings)
         
         return(training_data, val_data, mappings)
 
     #TO CHANGE - for fake observations. 
     def sample(self, N=1):
         """
-        Samples KDE and denormalizes sampled data
+        Samples Flow
         """
-        kde = self.kde
-        if self.normalize==True:
-            #need samples from flow instead of kde??? at what conditionals?
-            samps = denormalize_samples(kde.bounded_resample(N).T, self.param_bounds)
-        else:
-            samps = kde.bounded_resample(N).T
         return samps
 
     def __call__(self, data, conditional_hp_idxs, prior_pdf=None, proc_idx=None, return_dict=None):
         """
         Calculate the likelihood of the observations give a particular hypermodel (given by conditional_hps).
-        (this is the hyperlikelihood). \
-        The expectation is that "data" is a [Nobs x Nsample x Nparams] array. \
-        If prior_pdf is None, each observation is expected to have equal \
-        posterior probability. Otherwise, the prior weights should be \
-        provided as the dimemsions [samples(Nobs), samples(Nsamps)].
+        (this is the hyperlikelihood).
 
-        Returns: likelihood in shape [Nobs]
+        Parameters
+        ----------
+        data : array
+            posterior samples of observations or mock observations for which to calculate the likelihoods,
+            shape[Nobs x Nsample x Nparams]
+        conditional_hp_idxs : array
+            indices of hyperparameters for require submodel. of shape [self.conditionals]
+        prior_pdf : array
+            If prior_pdf is None, each observation is expected to have equal
+            posterior probability. Otherwise, the prior weights should be
+            provided as the dimemsions [samples(Nobs), samples(Nsamps)].
+        proc_idx : int
+            index of return_dict for multiprocessing
+        return_dict : dict
+            stores a dictionary of likelihoods for multiprocessing
+
+        Returns
+        -------
+        likelihood : array
+        the log likelihoods obtained from the flow model for each event, shape [Nobs]
         """
         
         likelihood = np.ones(data.shape[0]) * -np.inf
@@ -376,19 +401,23 @@ class FlowModel(Model):
 
         conditional_hps = []
 
+        #gets values of hyperparameters at indices given by conditional_hp_idxs
         #self.conditionals is number of hyperparameters, self.hps is list of hyperparameters [[chi_b],[alpha]]
         for i in range(self.conditionals):
             conditional_hps.append(self.hps[i][conditional_hp_idxs[i]])
         conditional_hps = np.asarray(conditional_hps)
 
+        #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(data)
 
-        #conditionals tiled into shape Nobs x Nsamples x Nconditionals
+        #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
         conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(mapped_obs, conditionals) -np.log(prior_pdf)
+
+        #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
             raise Exception('Obs data is outside of range of samples for channel - cannot logistic map.')
 
@@ -404,8 +433,17 @@ class FlowModel(Model):
 
     def map_obs(self,data):
         """
+        Maps oberservational data into logistically mapped space for flows to handle.
+
+        Parameters
+        -------
         data : array
-            Nobs x Nsamples x Nparams
+            observations in array Nobs x Nsamples x Nparams
+
+        Returns
+        -------
+        mapped_data : array
+            observational binary parameters logistically mapped
 
         TO CHANGE - account for different subsets of parameters.
         mappings in form [max_logit_mchirp, max_mchirp, max_q, None, max_logit_z, max_z]
