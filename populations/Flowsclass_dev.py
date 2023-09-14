@@ -46,7 +46,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity, normalize, detectable, device):
+    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu'):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
