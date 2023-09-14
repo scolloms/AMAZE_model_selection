@@ -202,7 +202,6 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
 
     # Likelihood
     lnprob = np.zeros(data.shape[0])-np.inf
-    prob = np.zeros(data.shape[0])
 
     # Detection effiency for this hypermodel
     alpha = 0
@@ -229,7 +228,6 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
-            prob += beta * smdl(data)
             alpha += beta * smdl.alpha
 
     #returns lnprob summed over events
