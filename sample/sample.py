@@ -217,6 +217,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
         # add contribution from this channel
         if use_flows==True:
             smdl = pop_models[channel]
+            #LSE over channels
             #keep lnprob as shape [Nobs]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)], axis=0)
             #this could be done without some janky if statement but would need some rewiring of alpha
@@ -230,7 +231,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
             alpha += beta * smdl.alpha
 
-    #returns lnprob summed over events
+    #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
     return (lnprob-np.log(alpha)).sum()
 
 

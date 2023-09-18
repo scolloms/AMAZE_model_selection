@@ -410,12 +410,14 @@ class FlowModel(Model):
         #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(data)
 
+
         #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
         conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(mapped_obs, conditionals) -np.log(prior_pdf)
+        print(likelihoods_per_samp)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
@@ -423,8 +425,11 @@ class FlowModel(Model):
 
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
+        print(logsumexp(likelihoods_per_samp, axis=1))
+
+        print(logsumexp(likelihoods_per_samp, axis=1) -np.log(data.shape[1]))
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
-        
+        print(likelihood)
         # store value for multiprocessing
         if return_dict is not None:
             return_dict[proc_idx] = likelihood
