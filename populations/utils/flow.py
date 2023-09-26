@@ -12,6 +12,7 @@ import sys
 
 from scipy.stats import entropy
 from scipy.stats import norm, gaussian_kde
+from scipy.special import logit
 
 import copy
 import torch
@@ -271,25 +272,66 @@ class NFlow():
         self.network.load_state_dict(torch.load(filename))
         self.network.eval()
 
-    def get_logprob(self, sample, conditionals):
+    def log_jacobian(self,sample, mappings):
+        #dtheta prime by dtheta
+        jac = torch.zeros(sample.shape[0], self.no_params)
+
+        jac[:,0] = 1/((sample[:,0]/mappings[1])*(1-(sample[:,0]/mappings[1]))*mappings[0])
+        jac[:,1] = 1/((sample[:,1])*(1-(sample[:,1]))*mappings[2])
+        jac[:,2] = 1/(1-sample[:,2]**2)
+        jac[:,3] = 1/((sample[:,3]/mappings[4])*(1-(sample[:,3]/mappings[4]))*mappings[3])
+
+        return torch.sum(torch.log(torch.abs(jac)), dim=1)
+
+    def get_logprob(self, sample, mapped_sample, conditionals):
         """
         get log_prob given a sample of [mchirp,q,chieff,z] given conditional hyperparameters
+
+        Parameters
+        ----------
+        sample : array
+            posterior samples of GW observations in unmapped data-space
+            [Nobs x Nsamples x Nparams] shape array
+        mapped_sample : array
+            posterior samples mapped into logistic space with Nflow.map_obs function
+            [Nobs x Nsamples x Nparams] shape array
+        conditionals : array
+            values of hyperparameters chi_b and alpha_CE
+            [Nobs x Nsamples x Nconditionals] shapped array
+
+        Returns
+        ----------
+        log_prob : array
+            the log probability of each sample
+            [Nobs x Nsamples] shaped array
         """
         #make sure samples in right format
         sample = torch.from_numpy(sample.astype(np.float32)).to(self.device)
+        mapped_sample = torch.from_numpy(mapped_sample.astype(np.float32)).to(self.device)
         hyperparams = torch.from_numpy(conditionals.astype(np.float32)).to(self.device)
         #store shape
-        shape = sample.shape
+        shape = mapped_sample.shape
 
-        #flatten samples given they are have dimensions Nsampels x Nobs x Nparams
+        #flatten samples given they are have dimensions Nsamples x Nobs x Nparams
         sample = torch.flatten(sample, start_dim=0, end_dim=1)
+        mapped_sample = torch.flatten(mapped_sample, start_dim=0, end_dim=1)
         hyperparams = torch.flatten(hyperparams, start_dim=0, end_dim=1)
-
         hyperparams = hyperparams.reshape(-1,self.cond_inputs)
         sample = sample.reshape(-1,4)
+        mapped_sample = mapped_sample.reshape(-1,4)
+
+        #currently using mappings from AMAZE_model_selection/flow_models/cosmo_weights/CE_mappings.npy
+        #removed 'None' that was stand in for secondary q mapping
+        mappings=torch.asarray([-0.5054364941584185,
+                    100.0,
+                    13.347090269689224,
+                    14.035571191869641,
+                    10.0])
 
         with torch.no_grad():
-            log_prob = self.network.log_prob(sample, hyperparams)
+            log_prob = self.network.log_prob(mapped_sample, hyperparams)
+            log_prob += self.log_jacobian(sample, mappings)
+
             #reshape
             log_prob = torch.reshape(log_prob, [shape[0],shape[1]])
 

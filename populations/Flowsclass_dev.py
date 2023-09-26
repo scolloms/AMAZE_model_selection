@@ -320,7 +320,7 @@ class FlowModel(Model):
                     models[chib_id, alpha_id]=np.asarray(samples[(chib_id, alpha_id)][params])
                     weights[chib_id, alpha_id]=np.asarray(self.combined_weights[(chib_id, alpha_id)])
 
-            #reshaping popsynth samples into array of shape [Nhyperparameter combinations,Nbinaries,Nparams]
+            #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = np.concatenate(models, axis=0)
             joined_chib_weights = np.concatenate(weights, axis=0)
             models_stack = np.concatenate(joined_chib_samples, axis=0) #all models if needed
@@ -381,6 +381,7 @@ class FlowModel(Model):
         conditional_hp_idxs : array
             indices of hyperparameters for require submodel. of shape [self.conditionals]
         prior_pdf : array
+            p(x) prior on the data
             If prior_pdf is None, each observation is expected to have equal
             posterior probability. Otherwise, the prior weights should be
             provided as the dimemsions [samples(Nobs), samples(Nsamps)].
@@ -416,8 +417,7 @@ class FlowModel(Model):
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
         #calculates likelihoods for all events and all samples
-        likelihoods_per_samp = self.flow.get_logprob(mapped_obs, conditionals) -np.log(prior_pdf)
-        print(likelihoods_per_samp)
+        likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, conditionals) - np.log(prior_pdf)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
@@ -425,11 +425,7 @@ class FlowModel(Model):
 
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
-        print(logsumexp(likelihoods_per_samp, axis=1))
-
-        print(logsumexp(likelihoods_per_samp, axis=1) -np.log(data.shape[1]))
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
-        print(likelihood)
         # store value for multiprocessing
         if return_dict is not None:
             return_dict[proc_idx] = likelihood
@@ -458,7 +454,7 @@ class FlowModel(Model):
 
         mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], True, False, self.mappings[0], self.mappings[1])
         mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], True, False, self.mappings[2])
-        mapped_data[:,:,2]= np.tanh(data[:,:,2])
+        mapped_data[:,:,2]= np.arctanh(data[:,:,2])
         mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], True, False, self.mappings[4], self.mappings[5])
 
         return mapped_data
