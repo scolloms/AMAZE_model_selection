@@ -17,5 +17,3 @@ python model_select --file-path ${model_path} \
         --sensitivity 'midhighlatelow_network' \
         --save-samples \
         --make-plots \
-        --name 'KDE_testrun'
-
