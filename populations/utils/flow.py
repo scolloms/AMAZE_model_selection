@@ -29,6 +29,7 @@ class NFlow():
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
                 no_binaries, batch_size, total_hps, RNVP=True, num_bins=4, device="cpu"):
+                
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
 
@@ -323,7 +324,6 @@ class NFlow():
         #currently using mappings from AMAZE_model_selection/flow_models/cosmo_weights/CE_mappings.npy
         #removed 'None' that was stand in for secondary q mapping
         mappings=mappings[mappings != None]
-        print(mappings)
 
         with torch.no_grad():
             log_prob = self.network.log_prob(mapped_sample, hyperparams)

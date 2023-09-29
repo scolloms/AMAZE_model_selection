@@ -17,6 +17,7 @@ from scipy.stats import norm, truncnorm
 from scipy.special import logit
 from scipy.special import logsumexp
 from scipy.special import expit
+from sklearn.model_selection import train_test_split
 from .utils.selection_effects import projection_factor_Dominik2015_interp, _PSD_defaults
 from .utils.flow import NFlow
 
@@ -277,23 +278,20 @@ class FlowModel(Model):
                 models_stack = np.copy(models)
 
             #map samples before dividing into training and validation data
-            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True)
+            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True, False, 1., 100.)
             if channel_id == 2: 
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
-                models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1], True)
+                models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1], True, False, 1., 1.001)
             else:
-                models_stack[:,1], max_q, _ = self.logistic(models_stack[:,1])
+                models_stack[:,1], max_q, _ = self.logistic(models_stack[:,1], True, False, 1., 1.)
             models_stack[:,2] = np.arctanh(models_stack[:,2])
-            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3], True)
+            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3], True, False, 1., 10.)
 
-            #TO CHANGE: divide up validation and training data properly
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
-            training_hps_stack = np.reshape(training_hps_stack,(-1,1))
-            validation_hps_stack = np.reshape(training_hps_stack,(-1,1))
-            train_models_stack = models_stack
-            validation_models_stack = models_stack
-            train_weights = weights
-            validation_weights = weights
+            training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
+            weights = np.reshape(weights,(-1,1))
+            train_models_stack, train_weights, training_hps_stack, validation_models_stack, validation_weights, validation_hps_stacks = \
+                    train_test_split(models_stack, training_hps_stack, weights, shuffle=True, train_size=0.8)
 
         else:
             #CE channel with alpha parameter treatment
@@ -329,16 +327,16 @@ class FlowModel(Model):
 
             #TO CHANGE - needs to account for different sets of parameters
             #chirp mass original range 0 to inf
-            joined_chib_samples[:,:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,:,0], True)
+            joined_chib_samples[:,:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,:,0], True, False, 1., 100.)
 
             #mass ratio - original range 0 to 1
-            joined_chib_samples[:,:,1], max_q, _ = self.logistic(joined_chib_samples[:,:,1])
+            joined_chib_samples[:,:,1], max_q, _ = self.logistic(joined_chib_samples[:,:,1], True, False, 1., 1.)
 
             #chieff - original range -0.5 to +1
             joined_chib_samples[:,:,2] = np.arctanh(joined_chib_samples[:,:,2])
 
             #redshift - original range 0 to inf
-            joined_chib_samples[:,:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,:,3], True)
+            joined_chib_samples[:,:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,:,3], True, False, 1., 10.)
 
             #keep samples seperated by model id (combined chi_b and alpha id) until validation samples are removed, then concatenate
             train_models = np.delete(joined_chib_samples, removed_model_id, 0) #removes samples from validation models
@@ -348,10 +346,11 @@ class FlowModel(Model):
             validation_model = joined_chib_samples[removed_model_id,:,:]
             validation_weights = joined_chib_weights[removed_model_id,:]
             validation_models_stack = np.concatenate(validation_model, axis=0)
+            
+            train_weights = np.reshape(train_weights,(-1,1))
+            validation_weights = np.reshape(validation_weights,(-1,1))
 
         #concatenate data plus weights with hyperparams
-        train_weights = np.reshape(train_weights,(-1,1))
-        validation_weights = np.reshape(validation_weights,(-1,1))
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
 
@@ -476,7 +475,7 @@ class FlowModel(Model):
         if wholedataset:
             max = np.max(d)
         else:
-            max = max
+            max = np.max(d)
         d /= max
         return([d, max, rescale_max])
 
@@ -488,7 +487,7 @@ class FlowModel(Model):
         return(data)
 
     def train(self, lr, epochs, batch_no, filepath, channel):
-        training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath, channel)
+        training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
         save_filename = f'{filepath}{channel}.pt'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data)
 
