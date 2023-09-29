@@ -417,7 +417,7 @@ class FlowModel(Model):
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
         #calculates likelihoods for all events and all samples
-        likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, conditionals) - np.log(prior_pdf)
+        likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) - np.log(prior_pdf)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):

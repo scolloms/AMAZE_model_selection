@@ -283,7 +283,7 @@ class NFlow():
 
         return torch.sum(torch.log(torch.abs(jac)), dim=1)
 
-    def get_logprob(self, sample, mapped_sample, conditionals):
+    def get_logprob(self, sample, mapped_sample, mappings, conditionals):
         """
         get log_prob given a sample of [mchirp,q,chieff,z] given conditional hyperparameters
 
@@ -322,11 +322,8 @@ class NFlow():
 
         #currently using mappings from AMAZE_model_selection/flow_models/cosmo_weights/CE_mappings.npy
         #removed 'None' that was stand in for secondary q mapping
-        mappings=torch.asarray([-0.5054364941584185,
-                    100.0,
-                    13.347090269689224,
-                    14.035571191869641,
-                    10.0])
+        mappings=mappings[mappings != None]
+        print(mappings)
 
         with torch.no_grad():
             log_prob = self.network.log_prob(mapped_sample, hyperparams)
