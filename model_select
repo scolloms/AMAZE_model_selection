@@ -342,6 +342,7 @@ else:
     for model in model_names:
         if verbose:
             print_both(print_file, "  {0:s}".format(model))
+        #freezing the sample evals means using the call function, this is where the prior on the posterior samples is set in
         getFromDict(pop_models, model.split('/')).freeze(obsdata, data_pdf=p_theta, multiproc=args.multiproc)
     if verbose:
         print_both(print_file, "Done freezing KDE evaluations of observations!\n")
@@ -377,7 +378,7 @@ while all_models_at_deepest==False:
 
 # --- Do the sampling!
 sampler = sample.Sampler(model_names)
-sampler.sample(pop_models, obsdata, use_flows, verbose=verbose)
+sampler.sample(pop_models, obsdata, use_flows, prior_pdf=p_theta, verbose=verbose)
 samples = sampler.samples
 raw_samples = samples.copy()
 lnprb = sampler.lnprb

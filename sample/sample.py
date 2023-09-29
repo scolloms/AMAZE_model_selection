@@ -99,7 +99,7 @@ posteriors!".format(self.posterior_name))
         self.fburnin = kwargs['fburnin'] if 'fburnin' in kwargs else _fburnin
 
     #still input flow dictionary
-    def sample(self, pop_models, obsdata, use_flows, verbose=True):
+    def sample(self, pop_models, obsdata, use_flows, prior_pdf, verbose=True):
         """
         Initialize and run the sampler
         """
@@ -120,7 +120,7 @@ posteriors!".format(self.posterior_name))
 
         # --- Do the sampling
         #TO CHANGE for continuous flows - feed flows and prior range on chi_b and alpha for samplers
-        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows] #these are arguments to pass to self.posterior
+        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, prior_pdf] #these are arguments to pass to self.posterior
         if verbose:
             print("Sampling...")
         sampler = self.sampler(self.nwalkers, self.ndim, self.posterior, args=posterior_args) #calls emcee sampler with self.posterior as probability function
@@ -175,14 +175,14 @@ def lnp(x, submodels_dict, _concentration):
     return dirichlet.logpdf(betas_tmp, _concentration)
 
 
-def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here is obsdata previously, and x is the point in log hyperparam space
+def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows): #data here is obsdata previously, and x is the point in log hyperparam space
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
 
     x: array
-        current position of walker in parameter space. 
-        [Nhyperparameters=2] even for channels with 1 hyperparameter
+        current position of walker in parameter space of hyperparameter *indices*
+        shape [Nhyperparameters=2] even for channels with 1 hyperparameter
     data: array
         GW posterior samples or mock observations
         [Nobs x Nsample x Nparams]
@@ -219,7 +219,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
             smdl = pop_models[channel]
             #LSE over channels
             #keep lnprob as shape [Nobs]
-            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs)], axis=0)
+            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs, prior_pdf=prior_pdf)], axis=0)
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
@@ -236,7 +236,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, use_flows): #data here
     return (lnprob-np.log(alpha)).sum()
 
 
-def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows):
+def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows, prior_pdf):
     """
     Combines the prior and likelihood to give a log posterior probability 
     at a given point
@@ -254,7 +254,7 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
         return log_prior
 
     # Likelihood
-    log_like = lnlike(x, data, kde_models, submodels_dict, channels, use_flows)
+    log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows)
 
     return log_like + log_prior #evidence is divided out
 
