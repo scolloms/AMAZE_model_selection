@@ -255,8 +255,7 @@ class FlowModel(Model):
             constants used to map the mchirp, q, and z distributions.
         """
 
-        if self.verbose:
-            print('Mapping population synthesis samples for training...')
+        print('Mapping population synthesis samples for training...')
         
         channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
         channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
