@@ -275,7 +275,7 @@ class NFlow():
 
     def log_jacobian(self,sample, mappings):
         #dtheta prime by dtheta
-        jac = torch.zeros(sample.shape[0], self.no_params)
+        jac = torch.zeros(sample.shape[0], self.no_params).to(self.device)
 
         jac[:,0] = 1/((sample[:,0]/mappings[1])*(1-(sample[:,0]/mappings[1]))*mappings[0])
         jac[:,1] = 1/((sample[:,1])*(1-(sample[:,1]))*mappings[2])
