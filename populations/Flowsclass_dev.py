@@ -475,7 +475,7 @@ class FlowModel(Model):
         if wholedataset:
             max = np.max(d)
         else:
-            max = np.max(d)
+            max = max
         d /= max
         return([d, max, rescale_max])
 
