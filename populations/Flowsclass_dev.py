@@ -269,12 +269,13 @@ class FlowModel(Model):
             model_size = np.zeros(self.no_params)
             cumulsize = np.zeros(self.no_params)
 
+            #moves binary parameter samples and weights from dictionaries into arrays, reducing dimension in hyperparameter space
             for chib_id, xb in enumerate(self.hps[0]):
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
                 models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
-                models_stack = np.copy(models)
+            models_stack = np.copy(models)
 
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True, False, 1., 100.)
@@ -289,9 +290,9 @@ class FlowModel(Model):
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
             weights = np.reshape(weights,(-1,1))
-            train_models_stack, train_weights, training_hps_stack, validation_models_stack, validation_weights, validation_hps_stacks = \
-                    train_test_split(models_stack, training_hps_stack, weights, shuffle=True, train_size=0.8)
-
+            train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
+                    train_test_split(models_stack, weights, training_hps_stack, shuffle=True, train_size=0.8)
+            
         else:
             #CE channel with alpha parameter treatment
 
@@ -349,7 +350,7 @@ class FlowModel(Model):
             train_weights = np.reshape(train_weights,(-1,1))
             validation_weights = np.reshape(validation_weights,(-1,1))
 
-        #concatenate data plus weights with hyperparams
+        #concatenate data and weights and hyperparams
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
 
