@@ -321,7 +321,6 @@ class NFlow():
         sample = sample.reshape(-1,4)
         mapped_sample = mapped_sample.reshape(-1,4)
 
-        #currently using mappings from AMAZE_model_selection/flow_models/cosmo_weights/CE_mappings.npy
         #removed 'None' that was stand in for secondary q mapping
         mappings=mappings[mappings != None]
 
