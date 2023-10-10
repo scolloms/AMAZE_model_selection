@@ -1,6 +1,7 @@
 import sys
 import pandas as pd
 import numpy as np
+import unittest
 
 from scipy.special import logsumexp
 
@@ -12,7 +13,10 @@ from populations.Flowsclass_dev import FlowModel
 from populations import gw_obs
 
 def get_lnlikelihood(new_lnlikelihoods=False):
-    #set posterior indxs here?
+    #gets likelihoods from flow __call__ function for the observations in the GW channel
+    #for any channel but with conditional chib=0.2 and alpha=1.
+    #new_lnlikelihoods allows saving those likelihoods to a file
+
     params = ['mchirp','q', 'chieff', 'z']
     file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
     gw_path = '/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events'
@@ -27,7 +31,7 @@ def get_lnlikelihood(new_lnlikelihoods=False):
         popsynth_outputs = read_models.read_hdf5(file_path, chnl)
         flows[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device='cpu')
         flows[chnl].load_model('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/flow_models/', chnl)
-        conditional_idxs =[3,1]
+        conditional_idxs =[0.2,1.]
         lnlikelihood[chnl] = flows[chnl](obsdata,conditional_idxs)
 
     if new_lnlikelihoods:
@@ -59,11 +63,17 @@ def get_llh_all_chnls(new_lnlikelihoods, channels):
 
 #Create test class when multiple tests
 
-def test_likelihood(chnl):
-    lnlikelihoods = pd.read_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/tests/likelihoods.csv')
-    check_lnls = pd.DataFrame.from_dict(get_lnlikelihood())[chnl]
-    print(check_lnls-lnlikelihoods[chnl])
-    #check why its this number
-    assert (check_lnls - lnlikelihoods[chnl] <= 3.552714e-15).all()
+class TestFlowLikelihoods(unittest.TestCase):
 
-#Next unit test - test that correct samples are read in for each channel
+    def test_p_x_chialpha(self):
+        for chnl in ['CE','CHE', 'GC','NSC','SMT']:
+            #read-in pre-computed likelihoods - need to change this so its for each channel
+            lnlikelihoods = pd.read_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/tests/likelihoods.csv')
+            check_lnls = pd.DataFrame.from_dict(get_lnlikelihood())[chnl]
+            print(check_lnls-lnlikelihoods[chnl])
+            #check why its this number
+            assert (check_lnls - lnlikelihoods[chnl] <= 3.552714e-15).all()
+
+    def test_p_theta_chialpha(self):
+        #call get_llh_all_chnls and compare to sampling loglikelihood
+        pass
