@@ -105,7 +105,6 @@ class NFlow():
             for _ in range(n_batches):
                 #split training data into - train: binary params; conditional: pop hyperparams
                 x_train, x_conditional, xweights = self.get_training_data(training_data)
-
                 #sets flow optimisers gradients to zero
                 optimiser.zero_grad()
                 #calculate the training loss function for flow as -log_prob
@@ -177,7 +176,7 @@ class NFlow():
         #axins.set_yscale('log')
         plt.show()
 
-        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_means.csv')
+        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
 
     def sample(self, no_samples, conditional):
         """
@@ -306,6 +305,7 @@ class NFlow():
             the log probability of each sample
             [Nobs x Nsamples] shaped array
         """
+
         #make sure samples in right format
         sample = torch.from_numpy(sample.astype(np.float32)).to(self.device)
         mapped_sample = torch.from_numpy(mapped_sample.astype(np.float32)).to(self.device)
@@ -318,8 +318,8 @@ class NFlow():
         mapped_sample = torch.flatten(mapped_sample, start_dim=0, end_dim=1)
         hyperparams = torch.flatten(hyperparams, start_dim=0, end_dim=1)
         hyperparams = hyperparams.reshape(-1,self.cond_inputs)
-        sample = sample.reshape(-1,4)
-        mapped_sample = mapped_sample.reshape(-1,4)
+        sample = sample.reshape(-1,self.no_params)
+        mapped_sample = mapped_sample.reshape(-1,self.no_params)
 
         #removed 'None' that was stand in for secondary q mapping
         mappings=mappings[mappings != None]

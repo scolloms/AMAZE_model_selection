@@ -279,7 +279,7 @@ class FlowModel(Model):
 
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True, False, 1., 100.)
-            if channel_id == 2: 
+            if channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
                 models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1], True, False, 1., 1.001)
             else:
@@ -294,7 +294,7 @@ class FlowModel(Model):
                     train_test_split(models_stack, weights, training_hps_stack, shuffle=True, train_size=0.8)
             
         else:
-            #CE channel with alpha parameter treatment
+            #CE channel with alpha_CE parameter
 
             #put data from required parameters for all alphas and chi_bs into model_stack
             models = np.zeros((4,5,self.no_binaries, self.no_params))
@@ -361,10 +361,13 @@ class FlowModel(Model):
         return(training_data, val_data, mappings)
 
     #TO CHANGE - for fake observations. 
-    def sample(self, N=1):
+    def sample(self, conditional, N=1):
         """
         Samples Flow
         """
+        #tile conditional first
+        conditional = np.repeat(conditional, N)
+        samps = self.flow.sample(N,conditional)
         return samps
 
     def __call__(self, data, conditional_hp_idxs, prior_pdf=None, proc_idx=None, return_dict=None):
