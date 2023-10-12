@@ -73,3 +73,9 @@ class TestFlowModel(unittest.TestCase):
             print(percent_difference)
 
             assert (percent_difference <= 0.001).all()
+
+class TestNFlow(unittest.TestCase):
+    def test_jacobian(self):
+        #test that samples match samples fed in
+        #test that the jacobian is calculated correctly for 1 test sample
+        pass
