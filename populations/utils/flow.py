@@ -168,9 +168,9 @@ class NFlow():
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
-        trainloss = np.asarray(self.history['train'][:])
+        trainloss = np.asarray(self.history['train'][5:])
         axins.plot(trainloss, label = 'Train loss')#-np.min(trainloss)
-        valloss = np.asarray(self.history['val'][:])
+        valloss = np.asarray(self.history['val'][5:])
         axins.plot(valloss, label = 'Validation loss')#-np.min(trainloss)
         axins.set_xscale('log')
         #axins.set_yscale('log')
@@ -276,10 +276,11 @@ class NFlow():
         #dtheta prime by dtheta
         jac = torch.zeros(sample.shape[0], self.no_params).to(self.device)
 
-        jac[:,0] = 1/((sample[:,0]/mappings[1])*(1-(sample[:,0]/mappings[1]))*mappings[0])
+        jac[:,0] = mappings[1]/((sample[:,0])*(mappings[1]-(sample[:,0]))*mappings[0])
         jac[:,1] = 1/((sample[:,1])*(1-(sample[:,1]))*mappings[2])
         jac[:,2] = 1/(1-sample[:,2]**2)
-        jac[:,3] = 1/((sample[:,3]/mappings[4])*(1-(sample[:,3]/mappings[4]))*mappings[3])
+        jac[:,3] = mappings[4]/((sample[:,3])*(mappings[4]-(sample[:,3]))*mappings[3])
+        
 
         return torch.sum(torch.log(torch.abs(jac)), dim=1)
 

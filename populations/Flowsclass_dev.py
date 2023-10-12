@@ -463,6 +463,11 @@ class FlowModel(Model):
 
 
     def logistic(self, data,rescaling=False, wholedataset=True, max =1, rescale_max=1):
+        #Logistically maps sample in non-logistsic space
+        #input is [Nsamps] shape array
+        #if the whole training set is passed to the function, this determines the maximum rescaling values
+
+        #rescales samples so that they lie between 0 to 1
         if rescaling:
             if wholedataset:
                 rescale_max = np.max(data) + 0.01
@@ -472,9 +477,15 @@ class FlowModel(Model):
         else:
             rescale_max = None
             d = data
-        #if data <0 or data >1:
-            #raise Exception('Data out of bounds for logistic mapping')
+        
+        #sample must be within bounds for logistic function to return definite value
+        if d <=0 or d >=1:
+            raise Exception('Data out of bounds for logistic mapping')
+
+        #takes the logistic of sample
         d = logit(d)
+
+        #scales the distribution in logistic space, so that the samples can have spread O(1), easier for flow to learn
         if wholedataset:
             max = np.max(d)
         else:
