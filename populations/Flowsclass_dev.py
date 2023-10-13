@@ -83,13 +83,13 @@ class FlowModel(Model):
         return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device)
 
 
-    def __init__(self, label, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu'):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu'):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
         Parameters
         ----------
-        label : str
+        channel : str
             channel label of form 'CE'
         samples : Dataframe
             samples from population synthesis.
@@ -108,7 +108,7 @@ class FlowModel(Model):
         """
         
         super()
-        self.channel_label = label
+        self.channel_label = channel
         self.samples = samples
         self.params = params
         self.sensitivity = sensitivity
@@ -119,7 +119,7 @@ class FlowModel(Model):
         self.hps = [[0.,0.1,0.2,0.5]]
 
         #additional alpha dimension for CE channel, else dummy dimension
-        if label=='CE':
+        if self.channel_label=='CE':
             self.hps.append([0.2,0.5,1.,2.,5.])
         else:
             self.hps.append([1])
@@ -141,7 +141,7 @@ class FlowModel(Model):
             for alphaid, alphaCE in enumerate(self.hps[1]):
 
                 #grab samples for each submodel depending on how many hyperparameter dimensions there are (CE vs non-CE)
-                if label=='CE':
+                if self.channel_label=='CE':
                     sbml_samps = samples[chib_id,alphaid]
                     key = chib_id,alphaid
                 else:
@@ -220,7 +220,7 @@ class FlowModel(Model):
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    total_hps, RNVP=False, num_bins=4, device=device)
+                    total_hps, self.channel_label, RNVP=False, num_bins=4, device=device)
         self.flow = flow
 
 
@@ -463,9 +463,11 @@ class FlowModel(Model):
 
 
     def logistic(self, data,rescaling=False, wholedataset=True, max =1, rescale_max=1):
-        #Logistically maps sample in non-logistsic space
-        #input is [Nsamps] shape array
-        #if the whole training set is passed to the function, this determines the maximum rescaling values
+        """
+        Logistically maps sample in non-logistsic space
+        input is [Nsamps] shape array
+        if the whole training set is passed to the function, this determines the maximum rescaling values
+        """
 
         #rescales samples so that they lie between 0 to 1
         if rescaling:
@@ -479,7 +481,7 @@ class FlowModel(Model):
             d = data
         
         #sample must be within bounds for logistic function to return definite value
-        #if d.any() <=0 or d >=1:
+        #if np.any(d) <=0 or d >=1:
         #    raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
