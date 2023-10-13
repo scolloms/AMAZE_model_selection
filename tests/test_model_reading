@@ -77,5 +77,6 @@ class TestFlowModel(unittest.TestCase):
 class TestNFlow(unittest.TestCase):
     def test_jacobian(self):
         #test that samples match samples fed in
+        #test that jacobian is right datatype
         #test that the jacobian is calculated correctly for 1 test sample
         pass
