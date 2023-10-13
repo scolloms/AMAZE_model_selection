@@ -28,7 +28,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
-                no_binaries, batch_size, total_hps, RNVP=True, num_bins=4, device="cpu"):
+                no_binaries, batch_size, total_hps, channel_label, RNVP=True, num_bins=4, device="cpu"):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -49,6 +49,8 @@ class NFlow():
             number of training + validation samples to use in each batch
         total_hps : int
             number of subpopulations
+        channel_label : str
+            str corresponding to which formation channel this flow is for, e.g. 'CE'
         RNVP : bool
             whether or not to use realNVP flow, if False use spline
         num_bins : int
@@ -59,9 +61,9 @@ class NFlow():
         self.batch_size = batch_size
 
         self.total_hps = total_hps
-
         self.cond_inputs = cond_inputs
 
+        self.channel = channel_label
         self.device = device # cuda:X where X is the slot of the GPU. run nvidia-smi in the terminal to see gpus
 
         if RNVP:
@@ -78,7 +80,6 @@ class NFlow():
 
     #training and validation loop for the flow
     def trainval(self, lr, epochs, batch_no, filename, training_data, val_data):
-
 
         #set optimiser for flow, optimises flow parameters:
         #(affine - s and t that shift and scale the transforms)
@@ -147,36 +148,28 @@ class NFlow():
         print(f'\n Best epoch: {best_epoch}')
         self.network.load_state_dict(best_model)
         torch.save(best_model, filename)
+        self.plot_history()
 
-    def plot_history(self, filename=None):
+    def plot_history(self):
         """
-        Plots losses, KL, and latent space
-
-        Parameters
-        ----------
-        filename : str
-            where to save history values
+        Plots losses for training of network
         """
 
         #loss plot
         fig, ax = plt.subplots(figsize = (10,5))
         ax.plot(self.history['train'][5:], label = 'Train loss')
-        ax.plot(self.history['val'][5:], label = 'Validation loss')
+        ax.plot(self.history['val'][5:], label = 'Val loss')
         ax.set_ylabel('Loss')
         ax.set_xlabel('Epochs')
         ax.legend(loc = 'best')
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
-        trainloss = np.asarray(self.history['train'][5:])
-        axins.plot(trainloss, label = 'Train loss')#-np.min(trainloss)
-        valloss = np.asarray(self.history['val'][5:])
-        axins.plot(valloss, label = 'Validation loss')#-np.min(trainloss)
+        trainloss = np.asarray(self.history['train'][1:])
+        valloss = np.asarray(self.history['val'][1:])
         axins.set_xscale('log')
-        #axins.set_yscale('log')
-        plt.show()
-
-        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
+        plt.savefig(f'{self.channel}loss.pdf')
+        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{self.channel}_loss_history.csv')
 
     def sample(self, no_samples, conditional):
         """
@@ -281,7 +274,6 @@ class NFlow():
         jac[:,2] = 1/(1-sample[:,2]**2)
         jac[:,3] = mappings[4]/((sample[:,3])*(mappings[4]-(sample[:,3]))*mappings[3])
         
-
         return torch.sum(torch.log(torch.abs(jac)), dim=1)
 
     def get_logprob(self, sample, mapped_sample, mappings, conditionals):
