@@ -479,8 +479,8 @@ class FlowModel(Model):
             d = data
         
         #sample must be within bounds for logistic function to return definite value
-        if d.any() <=0 or d >=1:
-            raise Exception('Data out of bounds for logistic mapping')
+        #if d.any() <=0 or d >=1:
+        #    raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
         d = logit(d)
