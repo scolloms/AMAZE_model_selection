@@ -147,29 +147,38 @@ class NFlow():
         #save best model
         print(f'\n Best epoch: {best_epoch}')
         self.network.load_state_dict(best_model)
-        torch.save(best_model, filename)
-        self.plot_history()
+        torch.save(best_model, f'{filename}.pt')
+        self.plot_history(filename)
 
-    def plot_history(self):
+    def plot_history(self,filename):
         """
         Plots losses for training of network
         """
 
         #loss plot
+        plt.rcParams.update({'font.size': 10})
         fig, ax = plt.subplots(figsize = (10,5))
         ax.plot(self.history['train'][5:], label = 'Train loss')
         ax.plot(self.history['val'][5:], label = 'Val loss')
-        ax.set_ylabel('Loss')
-        ax.set_xlabel('Epochs')
-        ax.legend(loc = 'best')
+        ax.set_ylabel('Loss', fontsize=10)
+        ax.set_xlabel('Epochs', fontsize=10)
+        ax.tick_params(axis='both', labelsize=10)
+        text = ax.yaxis.get_offset_text()
+        text.set_size(10)
+        ax.legend(loc = 'lower left', prop={'size':10})
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
         trainloss = np.asarray(self.history['train'][1:])
         valloss = np.asarray(self.history['val'][1:])
+        axins.plot(trainloss)
+        axins.plot(valloss)
         axins.set_xscale('log')
-        plt.savefig(f'{self.channel}loss.pdf')
-        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{self.channel}_loss_history.csv')
+        axins.tick_params(axis='both', labelsize=10)
+        text = axins.yaxis.get_offset_text()
+        text.set_size(10)
+        plt.savefig(f'{filename}loss.pdf')
+        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
 
     def sample(self, no_samples, conditional):
         """
@@ -225,9 +234,9 @@ class NFlow():
         #reshape tensors
         xdata=torch.from_numpy(batched_samples.astype(np.float32))
         #xhyperparams = np.concatenate(batched_hp_pairs)
-        xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32))
+        xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32)).to(self.device)
         xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
-        xweights = torch.from_numpy(batch_weights.astype(np.float32))
+        xweights = torch.from_numpy(batch_weights.astype(np.float32)).to(self.device)
 
         return(xdata, xhyperparams,xweights)
 
@@ -252,10 +261,10 @@ class NFlow():
             val_weights = validation_data[random_samples,-2]
 
         #reshape
-        xval=torch.from_numpy(validation_samples.astype(np.float32))
+        xval=torch.from_numpy(validation_samples.astype(np.float32)).to(self.device)
         xhyperparams = torch.from_numpy(validation_hp_pairs.astype(np.float32)) 
         xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
-        xweights = torch.from_numpy(val_weights.astype(np.float32)) 
+        xweights = torch.from_numpy(val_weights.astype(np.float32)).to(self.device)
         return(xval, xhyperparams, xweights)
 
     def load_model(self,filename):
@@ -270,9 +279,9 @@ class NFlow():
         jac = torch.zeros(sample.shape[0], self.no_params).to(self.device)
 
         jac[:,0] = mappings[1]/((sample[:,0])*(mappings[1]-(sample[:,0]))*mappings[0])
-        jac[:,1] = 1/((sample[:,1])*(1-(sample[:,1]))*mappings[2])
+        jac[:,1] = mappings[3]/((sample[:,1])*(mappings[3]-(sample[:,1]))*mappings[2])
         jac[:,2] = 1/(1-sample[:,2]**2)
-        jac[:,3] = mappings[4]/((sample[:,3])*(mappings[4]-(sample[:,3]))*mappings[3])
+        jac[:,3] = mappings[5]/((sample[:,3])*(mappings[5]-(sample[:,3]))*mappings[4])
         
         return torch.sum(torch.log(torch.abs(jac)), dim=1)
 

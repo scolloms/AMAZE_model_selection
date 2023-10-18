@@ -30,6 +30,8 @@ cosmo = cosmology.Planck18
 # which takes in a random number and spits out a projection factor 'w'
 projection_factor_interp = projection_factor_Dominik2015_interp()
 
+_param_bounds = {"mchirp": (0,100), "q": (0,1), "chieff": (-1,1), "z": (0,10)}
+
 """
 Set of classes used to construct statistical models of populations.
 """
@@ -117,6 +119,7 @@ class FlowModel(Model):
 
         #initialises list of population hyperparameter values
         self.hps = [[0.,0.1,0.2,0.5]]
+        self.param_bounds = [_param_bounds[param] for param in self.params]
 
         #additional alpha dimension for CE channel, else dummy dimension
         if self.channel_label=='CE':
@@ -278,14 +281,18 @@ class FlowModel(Model):
             models_stack = np.copy(models)
 
             #map samples before dividing into training and validation data
-            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True, False, 1., 100.)
+            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
+                rescale_max=self.param_bounds[0][1])
             if channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
-                models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1], True, False, 1., 1.001)
+                models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1],wholedataset=True, \
+                rescale_max=self.param_bounds[1][1]+0.001)
             else:
-                models_stack[:,1], max_q, _ = self.logistic(models_stack[:,1], True, False, 1., 1.)
+                models_stack[:,1], max_q, _ = self.logistic(models_stack[:,1],wholedataset=True, \
+                rescale_max=self.param_bounds[1][1])
             models_stack[:,2] = np.arctanh(models_stack[:,2])
-            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3], True, False, 1., 10.)
+            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
+                rescale_max=self.param_bounds[3][1])
 
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
@@ -327,16 +334,19 @@ class FlowModel(Model):
 
             #TO CHANGE - needs to account for different sets of parameters
             #chirp mass original range 0 to inf
-            joined_chib_samples[:,:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,:,0], True, False, 1., 100.)
+            joined_chib_samples[:,:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,:,0], wholedataset=True, \
+                rescale_max=self.param_bounds[0][1])
 
             #mass ratio - original range 0 to 1
-            joined_chib_samples[:,:,1], max_q, _ = self.logistic(joined_chib_samples[:,:,1], True, False, 1., 1.)
+            joined_chib_samples[:,:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,:,1], wholedataset=True, \
+                rescale_max=self.param_bounds[1][1])
 
             #chieff - original range -0.5 to +1
             joined_chib_samples[:,:,2] = np.arctanh(joined_chib_samples[:,:,2])
 
             #redshift - original range 0 to inf
-            joined_chib_samples[:,:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,:,3], True, False, 1., 10.)
+            joined_chib_samples[:,:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,:,3],wholedataset=True, \
+                rescale_max=self.param_bounds[3][1])
 
             #keep samples seperated by model id (combined chi_b and alpha id) until validation samples are removed, then concatenate
             train_models = np.delete(joined_chib_samples, removed_model_id, 0) #removes samples from validation models
@@ -355,7 +365,7 @@ class FlowModel(Model):
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
 
         #save mapping constants
-        mappings = np.asarray([max_logit_mchirp, max_mchirp, max_q, None, max_logit_z, max_z])
+        mappings = np.asarray([max_logit_mchirp, max_mchirp, max_logit_q, max_q, max_logit_z, max_z])
         np.save(f'{filepath}{self.channel_label}_mappings.npy',mappings)
         
         return(training_data, val_data, mappings)
@@ -454,35 +464,28 @@ class FlowModel(Model):
         """
         mapped_data = np.zeros((np.shape(data)[0],np.shape(data)[1],np.shape(data)[2]))
 
-        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], True, False, self.mappings[0], self.mappings[1])
-        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], True, False, self.mappings[2])
+        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, self.mappings[0], self.mappings[1])
+        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, self.mappings[2], self.mappings[3])
         mapped_data[:,:,2]= np.arctanh(data[:,:,2])
-        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], True, False, self.mappings[4], self.mappings[5])
+        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], False, self.mappings[4], self.mappings[5])
 
         return mapped_data
 
 
-    def logistic(self, data,rescaling=False, wholedataset=True, max =1, rescale_max=1):
+    def logistic(self, data, wholedataset, max =1, rescale_max=1):
         """
         Logistically maps sample in non-logistsic space
         input is [Nsamps] shape array
         if the whole training set is passed to the function, this determines the maximum rescaling values
         """
 
-        #rescales samples so that they lie between 0 to 1
-        if rescaling:
-            if wholedataset:
-                rescale_max = np.max(data) + 0.01
-            else:
-                rescale_max = rescale_max
-            d = data/rescale_max
-        else:
-            rescale_max = None
-            d = data
+        #rescales samples so that they lie between 0 to 1, according to the upper bound of the parameter space
+        rescale_max = rescale_max
+        d = data/rescale_max
         
         #sample must be within bounds for logistic function to return definite value
-        #if np.any(d) <=0 or d >=1:
-        #    raise Exception('Data out of bounds for logistic mapping')
+        if np.logical_or(d <= 0, d >= 1).any():
+            raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
         d = logit(d)
@@ -504,7 +507,7 @@ class FlowModel(Model):
 
     def train(self, lr, epochs, batch_no, filepath, channel):
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
-        save_filename = f'{filepath}{channel}.pt'
+        save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data)
 
     def load_model(self, filepath, channel):
