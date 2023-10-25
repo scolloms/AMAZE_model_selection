@@ -57,6 +57,7 @@ argp.add_argument("--flow-model-filename", type=str, default=None, help="saving/
 argp.add_argument("--train-flows", action="store_true", help="If true trains flow models for each model, if false load models. Default=False.")
 argp.add_argument("--lr", type=float, default='0.001', help="Learning rate to train flow models. Default=0.001.")
 argp.add_argument("--epochs", type=int, default='300', help="Epochs to train flow models. Default=300.")
+argp.add_argument("--spline-bins", type=int, default='4', help="Number of bins to use in Coupling Spline flows. Default=4.")
 argp.add_argument("--batch-no", type=int, default='10', help="Number of batches to train flow models. Default=10.")
 argp.add_argument("--device", type=str, default='cpu', help="Device to run model select on. Default=cpu, otherwise choose cuda:X where X is the slot of the GPU.")
 
@@ -103,7 +104,7 @@ params = list(np.asarray(args.params).flatten())
 if use_flows==True:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, device=args.device)
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, device=args.device, no_bins=args.spline_bins)
     #TO CHANGE - add detectable models?
     model_names.sort()
     hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
