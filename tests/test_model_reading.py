@@ -12,7 +12,7 @@ class TestFlowModel(unittest.TestCase):
     def load_flow(self,chnl):
         file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
         params = ['mchirp','q', 'chieff', 'z']
-        detectable=True
+        detectable=False
         popsynth_outputs = read_hdf5(file_path, chnl)
         sensitivity ='midhighlatelow_network'
 
