@@ -218,7 +218,7 @@ class FlowModel(Model):
 
         #number of data points (total) for each channel
         #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
-        channel_samples = [1e6,864124,896611,582961, 4e6]
+        channel_samples = [19912038,864124,896611,582961, 4e6]
         self.no_binaries = int(channel_samples[channel_id])
 
         #initislises network
@@ -276,6 +276,7 @@ class FlowModel(Model):
             for chib_id, xb in enumerate(self.hps[0]):
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
+                print(cumulsize)
                 models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
             models_stack = np.copy(models)
@@ -285,10 +286,10 @@ class FlowModel(Model):
                 rescale_max=self.param_bounds[0][1])
             if channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
-                models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1],wholedataset=True, \
+                models_stack[:,1], max_q, max_logit_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1]+0.001)
             else:
-                models_stack[:,1], max_q, _ = self.logistic(models_stack[:,1],wholedataset=True, \
+                models_stack[:,1], max_q, max_logit_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
             models_stack[:,2] = np.arctanh(models_stack[:,2])
             models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
@@ -304,61 +305,58 @@ class FlowModel(Model):
             #CE channel with alpha_CE parameter
 
             #put data from required parameters for all alphas and chi_bs into model_stack
-            models = np.zeros((4,5,self.no_binaries, self.no_params))
-            weights = np.zeros((4,5,self.no_binaries))
-            removed_model_id =[7,11]
-            val_hps = [[0.1,1],[0.2,.5]]
+            models = np.zeros((self.no_binaries, self.no_params))
+            weights = np.zeros((self.no_binaries,1))
+
+            model_size = np.zeros((4,5))
+            cumulsize = np.zeros(20)
 
             #format which chi_bs and alphas match which parameter values being read in
             chi_b_alpha_pairs= np.zeros((20,2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
 
-            training_hp_pairs = np.delete(chi_b_alpha_pairs, removed_model_id, 0) #removes [0.1,1] and [0.2,0.5] point
-            training_hps_stack = np.repeat(training_hp_pairs, self.no_binaries, axis=0) #repeats to cover all samples in each population
-            validation_hps_stack = np.repeat(val_hps, self.no_binaries, axis=0)
-            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, self.no_binaries, axis=0)
-
             #stack data
+            i=0
             for chib_id in range(4):
                 for alpha_id in range(5):
-                    models[chib_id, alpha_id]=np.asarray(samples[(chib_id, alpha_id)][params])
-                    weights[chib_id, alpha_id]=np.asarray(self.combined_weights[(chib_id, alpha_id)])
+                    weights_temp=np.asarray(self.combined_weights[(chib_id, alpha_id)])
+                    weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
+                    model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
+                    cumulsize[i] = np.sum(model_size)
+
+                    models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
+                    weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
+                    i+=1
+
+            
+            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (np.reshape(model_size, 20)).astype(int), axis=0)
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
-            joined_chib_samples = np.concatenate(models, axis=0)
-            joined_chib_weights = np.concatenate(weights, axis=0)
-            models_stack = np.concatenate(joined_chib_samples, axis=0) #all models if needed
+            joined_chib_samples = models
 
             #map samples before dividing into training and validation data
 
             #TO CHANGE - needs to account for different sets of parameters
             #chirp mass original range 0 to inf
-            joined_chib_samples[:,:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,:,0], wholedataset=True, \
+            joined_chib_samples[:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,0], wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
 
             #mass ratio - original range 0 to 1
-            joined_chib_samples[:,:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,:,1], wholedataset=True, \
+            joined_chib_samples[:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,1], wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
 
             #chieff - original range -0.5 to +1
-            joined_chib_samples[:,:,2] = np.arctanh(joined_chib_samples[:,:,2])
+            joined_chib_samples[:,2] = np.arctanh(joined_chib_samples[:,2])
 
             #redshift - original range 0 to inf
-            joined_chib_samples[:,:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,:,3],wholedataset=True, \
+            joined_chib_samples[:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,3],wholedataset=True, \
                 rescale_max=self.param_bounds[3][1])
 
-            #keep samples seperated by model id (combined chi_b and alpha id) until validation samples are removed, then concatenate
-            train_models = np.delete(joined_chib_samples, removed_model_id, 0) #removes samples from validation models
-            train_weights = np.delete(joined_chib_weights, removed_model_id, 0) #removes weights from validation models
-            train_models_stack = np.concatenate(train_models, axis=0)
-
-            validation_model = joined_chib_samples[removed_model_id,:,:]
-            validation_weights = joined_chib_weights[removed_model_id,:]
-            validation_models_stack = np.concatenate(validation_model, axis=0)
-            
-            train_weights = np.reshape(train_weights,(-1,1))
-            validation_weights = np.reshape(validation_weights,(-1,1))
+            weights = np.reshape(weights,(-1,1))
+            print(all_chi_b_alphas.shape)
+            train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
+                    train_test_split(joined_chib_samples, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
 
         #concatenate data and weights and hyperparams
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
