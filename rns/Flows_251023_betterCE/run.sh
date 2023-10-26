@@ -1,6 +1,7 @@
 #! /bin/bash
 #runs model select with cpu, with flows, and preset file paths, CE channel training
-#training for 500 epochs
+#updated CE training so that training and val data is shuffle split and weights>fmin
+#training for 700 epochs and with 5 spline bins
 
 model_path="/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5"
 gw_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events"
@@ -12,7 +13,8 @@ python ../../model_select --file-path ${model_path} \
         --flow-model-filename ${flow_path} \
 	--verbose \
         --channels 'CE'\
-        --epochs 1000 \
+        --epochs 700 \
+        --spline-bins 5 \
         --train-flows \
         --use-flows \
         --device cpu \

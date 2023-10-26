@@ -28,7 +28,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
-                no_binaries, batch_size, total_hps, channel_label, RNVP=True, num_bins=4, device="cpu"):
+                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu"):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -71,10 +71,11 @@ class NFlow():
                                     n_neurons = no_neurons, n_transforms = no_trans, n_blocks_per_transform = 2,
                                     linear_transform = None, batch_norm_between_transforms=True)
         else:
+            print(no_bins)
             self.network = CouplingNSF(n_inputs = training_inputs, n_conditional_inputs= cond_inputs,
                                         n_neurons = no_neurons, n_transforms = no_trans,
                                         n_blocks_per_transform = 2, batch_norm_between_transforms=True,
-                                        linear_transform = None, num_bins=num_bins)
+                                        linear_transform = None, num_bins=no_bins)
 
         self.network.to(device)
 
