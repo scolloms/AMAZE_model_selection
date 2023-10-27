@@ -11,3 +11,5 @@
 *.npy
 *.txt
 *.png
+*.sh
+*.sub
