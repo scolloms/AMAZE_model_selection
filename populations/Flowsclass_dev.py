@@ -483,6 +483,9 @@ class FlowModel(Model):
         
         #sample must be within bounds for logistic function to return definite value
         if np.logical_or(d <= 0, d >= 1).any():
+            print(self.channel_label)
+            print(rescale_max)
+            print(np.max(data))
             raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
