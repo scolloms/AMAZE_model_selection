@@ -148,7 +148,7 @@ def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitiv
     #Flow case: reads in samples from all channels and sends to FlowModel
     if use_flows==True:
         flow_models = {}
-        no_bins = kwargs['no_bins']
+        no_bins = np.asarray(kwargs['no_bins'])
         if no_bins.shape[0] != channels.shape[0]:
             raise ValueError('The number of bins specified does not match the shape of the number of channels')
         for i, chnl in enumerate(tqdm(channels)):
