@@ -511,6 +511,7 @@ class FlowModel(Model):
     def load_model(self, filepath, channel):
         self.flow.load_model(f'{filepath}{channel}.pt')
         self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
+        self.mappings[None] = 1.
 
 
     ######CURRENTLY don't worry about functions below here - theyre used for plotting or simulated events
