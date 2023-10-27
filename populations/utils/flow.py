@@ -71,7 +71,6 @@ class NFlow():
                                     n_neurons = no_neurons, n_transforms = no_trans, n_blocks_per_transform = 2,
                                     linear_transform = None, batch_norm_between_transforms=True)
         else:
-            print(no_bins)
             self.network = CouplingNSF(n_inputs = training_inputs, n_conditional_inputs= cond_inputs,
                                         n_neurons = no_neurons, n_transforms = no_trans,
                                         n_blocks_per_transform = 2, batch_norm_between_transforms=True,
@@ -159,8 +158,8 @@ class NFlow():
         #loss plot
         plt.rcParams.update({'font.size': 10})
         fig, ax = plt.subplots(figsize = (10,5))
-        ax.plot(self.history['train'][5:], label = 'Train loss')
-        ax.plot(self.history['val'][5:], label = 'Val loss')
+        ax.plot(self.history['val'][5:], label = 'Val loss', color='tab:orange')
+        ax.plot(self.history['train'][5:], label = 'Train loss', color='tab:blue')
         ax.set_ylabel('Loss', fontsize=10)
         ax.set_xlabel('Epochs', fontsize=10)
         ax.tick_params(axis='both', labelsize=10)
@@ -170,10 +169,10 @@ class NFlow():
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
-        trainloss = np.asarray(self.history['train'][1:])
         valloss = np.asarray(self.history['val'][1:])
-        axins.plot(trainloss)
-        axins.plot(valloss)
+        trainloss = np.asarray(self.history['train'][1:])
+        axins.plot(valloss, color='tab:orange')
+        axins.plot(trainloss, color='tab:blue')
         axins.set_xscale('log')
         axins.tick_params(axis='both', labelsize=10)
         text = axins.yaxis.get_offset_text()

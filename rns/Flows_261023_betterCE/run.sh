@@ -1,6 +1,6 @@
 #! /bin/bash
 #runs model select with cpu, with flows, and preset file paths, CE channel training
-#acctidentally run without this update: updated CE training so that training and val data is shuffle split and weights>fmin
+#pull the merge from no0weights branch: updated CE training so that training and val data is shuffle split and weights>fmin
 #training for 700 epochs and with 5 spline bins
 
 model_path="/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5"
