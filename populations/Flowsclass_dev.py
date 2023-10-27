@@ -514,7 +514,11 @@ class FlowModel(Model):
     def load_model(self, filepath, channel):
         self.flow.load_model(f'{filepath}{channel}.pt')
         self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
-        self.mappings[None] = 1.
+        if self.channel_label == 'GC':
+            self.mappings[self.mappings==None] = 1.001
+        else:
+            self.mappings[self.mappings==None] = 1.
+        print(self.mappings)
 
 
     ######CURRENTLY don't worry about functions below here - theyre used for plotting or simulated events
