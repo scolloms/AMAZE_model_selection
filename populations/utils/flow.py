@@ -28,7 +28,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
-                no_binaries, batch_size, total_hps, RNVP=True, num_bins=4, device="cpu"):
+                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu"):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -49,6 +49,8 @@ class NFlow():
             number of training + validation samples to use in each batch
         total_hps : int
             number of subpopulations
+        channel_label : str
+            str corresponding to which formation channel this flow is for, e.g. 'CE'
         RNVP : bool
             whether or not to use realNVP flow, if False use spline
         num_bins : int
@@ -59,9 +61,9 @@ class NFlow():
         self.batch_size = batch_size
 
         self.total_hps = total_hps
-
         self.cond_inputs = cond_inputs
 
+        self.channel = channel_label
         self.device = device # cuda:X where X is the slot of the GPU. run nvidia-smi in the terminal to see gpus
 
         if RNVP:
@@ -69,16 +71,16 @@ class NFlow():
                                     n_neurons = no_neurons, n_transforms = no_trans, n_blocks_per_transform = 2,
                                     linear_transform = None, batch_norm_between_transforms=True)
         else:
+            print(no_bins)
             self.network = CouplingNSF(n_inputs = training_inputs, n_conditional_inputs= cond_inputs,
                                         n_neurons = no_neurons, n_transforms = no_trans,
                                         n_blocks_per_transform = 2, batch_norm_between_transforms=True,
-                                        linear_transform = None, num_bins=num_bins)
+                                        linear_transform = None, num_bins=no_bins)
 
         self.network.to(device)
 
     #training and validation loop for the flow
     def trainval(self, lr, epochs, batch_no, filename, training_data, val_data):
-
 
         #set optimiser for flow, optimises flow parameters:
         #(affine - s and t that shift and scale the transforms)
@@ -146,36 +148,37 @@ class NFlow():
         #save best model
         print(f'\n Best epoch: {best_epoch}')
         self.network.load_state_dict(best_model)
-        torch.save(best_model, filename)
+        torch.save(best_model, f'{filename}.pt')
+        self.plot_history(filename)
 
-    def plot_history(self, filename=None):
+    def plot_history(self,filename):
         """
-        Plots losses, KL, and latent space
-
-        Parameters
-        ----------
-        filename : str
-            where to save history values
+        Plots losses for training of network
         """
 
         #loss plot
+        plt.rcParams.update({'font.size': 10})
         fig, ax = plt.subplots(figsize = (10,5))
         ax.plot(self.history['train'][5:], label = 'Train loss')
-        ax.plot(self.history['val'][5:], label = 'Validation loss')
-        ax.set_ylabel('Loss')
-        ax.set_xlabel('Epochs')
-        ax.legend(loc = 'best')
+        ax.plot(self.history['val'][5:], label = 'Val loss')
+        ax.set_ylabel('Loss', fontsize=10)
+        ax.set_xlabel('Epochs', fontsize=10)
+        ax.tick_params(axis='both', labelsize=10)
+        text = ax.yaxis.get_offset_text()
+        text.set_size(10)
+        ax.legend(loc = 'lower left', prop={'size':10})
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
-        trainloss = np.asarray(self.history['train'][5:])
-        axins.plot(trainloss, label = 'Train loss')#-np.min(trainloss)
-        valloss = np.asarray(self.history['val'][5:])
-        axins.plot(valloss, label = 'Validation loss')#-np.min(trainloss)
+        trainloss = np.asarray(self.history['train'][1:])
+        valloss = np.asarray(self.history['val'][1:])
+        axins.plot(trainloss)
+        axins.plot(valloss)
         axins.set_xscale('log')
-        #axins.set_yscale('log')
-        plt.show()
-
+        axins.tick_params(axis='both', labelsize=10)
+        text = axins.yaxis.get_offset_text()
+        text.set_size(10)
+        plt.savefig(f'{filename}loss.pdf')
         pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
 
     def sample(self, no_samples, conditional):
@@ -232,9 +235,9 @@ class NFlow():
         #reshape tensors
         xdata=torch.from_numpy(batched_samples.astype(np.float32))
         #xhyperparams = np.concatenate(batched_hp_pairs)
-        xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32))
+        xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32)).to(self.device)
         xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
-        xweights = torch.from_numpy(batch_weights.astype(np.float32))
+        xweights = torch.from_numpy(batch_weights.astype(np.float32)).to(self.device)
 
         return(xdata, xhyperparams,xweights)
 
@@ -259,10 +262,10 @@ class NFlow():
             val_weights = validation_data[random_samples,-2]
 
         #reshape
-        xval=torch.from_numpy(validation_samples.astype(np.float32))
+        xval=torch.from_numpy(validation_samples.astype(np.float32)).to(self.device)
         xhyperparams = torch.from_numpy(validation_hp_pairs.astype(np.float32)) 
         xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
-        xweights = torch.from_numpy(val_weights.astype(np.float32)) 
+        xweights = torch.from_numpy(val_weights.astype(np.float32)).to(self.device)
         return(xval, xhyperparams, xweights)
 
     def load_model(self,filename):
@@ -277,11 +280,10 @@ class NFlow():
         jac = torch.zeros(sample.shape[0], self.no_params).to(self.device)
 
         jac[:,0] = mappings[1]/((sample[:,0])*(mappings[1]-(sample[:,0]))*mappings[0])
-        jac[:,1] = 1/((sample[:,1])*(1-(sample[:,1]))*mappings[2])
+        jac[:,1] = mappings[3]/((sample[:,1])*(mappings[3]-(sample[:,1]))*mappings[2])
         jac[:,2] = 1/(1-sample[:,2]**2)
-        jac[:,3] = mappings[4]/((sample[:,3])*(mappings[4]-(sample[:,3]))*mappings[3])
+        jac[:,3] = mappings[5]/((sample[:,3])*(mappings[5]-(sample[:,3]))*mappings[4])
         
-
         return torch.sum(torch.log(torch.abs(jac)), dim=1)
 
     def get_logprob(self, sample, mapped_sample, mappings, conditionals):

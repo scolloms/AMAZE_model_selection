@@ -30,6 +30,8 @@ cosmo = cosmology.Planck18
 # which takes in a random number and spits out a projection factor 'w'
 projection_factor_interp = projection_factor_Dominik2015_interp()
 
+_param_bounds = {"mchirp": (0,100), "q": (0,1), "chieff": (-1,1), "z": (0,10)}
+
 """
 Set of classes used to construct statistical models of populations.
 """
@@ -47,7 +49,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu'):
+    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu', no_bins=4):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -80,16 +82,16 @@ class FlowModel(Model):
         FlowModel : obj
         """
 
-        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device)
+        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins)
 
 
-    def __init__(self, label, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu'):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
         Parameters
         ----------
-        label : str
+        channel : str
             channel label of form 'CE'
         samples : Dataframe
             samples from population synthesis.
@@ -108,7 +110,7 @@ class FlowModel(Model):
         """
         
         super()
-        self.channel_label = label
+        self.channel_label = channel
         self.samples = samples
         self.params = params
         self.sensitivity = sensitivity
@@ -117,9 +119,10 @@ class FlowModel(Model):
 
         #initialises list of population hyperparameter values
         self.hps = [[0.,0.1,0.2,0.5]]
+        self.param_bounds = [_param_bounds[param] for param in self.params]
 
         #additional alpha dimension for CE channel, else dummy dimension
-        if label=='CE':
+        if self.channel_label=='CE':
             self.hps.append([0.2,0.5,1.,2.,5.])
         else:
             self.hps.append([1])
@@ -141,7 +144,7 @@ class FlowModel(Model):
             for alphaid, alphaCE in enumerate(self.hps[1]):
 
                 #grab samples for each submodel depending on how many hyperparameter dimensions there are (CE vs non-CE)
-                if label=='CE':
+                if self.channel_label=='CE':
                     sbml_samps = samples[chib_id,alphaid]
                     key = chib_id,alphaid
                 else:
@@ -215,12 +218,12 @@ class FlowModel(Model):
 
         #number of data points (total) for each channel
         #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
-        channel_samples = [1e6,864124,896611,582961, 4e6]
+        channel_samples = [19912038,864124,896611,582961, 4e6]
         self.no_binaries = int(channel_samples[channel_id])
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    total_hps, RNVP=False, num_bins=4, device=device)
+                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
         self.flow = flow
 
 
@@ -273,19 +276,24 @@ class FlowModel(Model):
             for chib_id, xb in enumerate(self.hps[0]):
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
+                print(cumulsize)
                 models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
             models_stack = np.copy(models)
 
             #map samples before dividing into training and validation data
-            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], True, False, 1., 100.)
+            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
+                rescale_max=self.param_bounds[0][1])
             if channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
-                models_stack[:,1], max_q, extra_scale = self.logistic(models_stack[:,1], True, False, 1., 1.001)
+                models_stack[:,1], max_q, max_logit_q = self.logistic(models_stack[:,1],wholedataset=True, \
+                rescale_max=self.param_bounds[1][1]+0.001)
             else:
-                models_stack[:,1], max_q, _ = self.logistic(models_stack[:,1], True, False, 1., 1.)
+                models_stack[:,1], max_q, max_logit_q = self.logistic(models_stack[:,1],wholedataset=True, \
+                rescale_max=self.param_bounds[1][1])
             models_stack[:,2] = np.arctanh(models_stack[:,2])
-            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3], True, False, 1., 10.)
+            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
+                rescale_max=self.param_bounds[3][1])
 
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
@@ -297,65 +305,65 @@ class FlowModel(Model):
             #CE channel with alpha_CE parameter
 
             #put data from required parameters for all alphas and chi_bs into model_stack
-            models = np.zeros((4,5,self.no_binaries, self.no_params))
-            weights = np.zeros((4,5,self.no_binaries))
-            removed_model_id =[7,11]
-            val_hps = [[0.1,1],[0.2,.5]]
+            models = np.zeros((self.no_binaries, self.no_params))
+            weights = np.zeros((self.no_binaries,1))
+
+            model_size = np.zeros((4,5))
+            cumulsize = np.zeros(20)
 
             #format which chi_bs and alphas match which parameter values being read in
             chi_b_alpha_pairs= np.zeros((20,2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
 
-            training_hp_pairs = np.delete(chi_b_alpha_pairs, removed_model_id, 0) #removes [0.1,1] and [0.2,0.5] point
-            training_hps_stack = np.repeat(training_hp_pairs, self.no_binaries, axis=0) #repeats to cover all samples in each population
-            validation_hps_stack = np.repeat(val_hps, self.no_binaries, axis=0)
-            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, self.no_binaries, axis=0)
-
             #stack data
+            i=0
             for chib_id in range(4):
                 for alpha_id in range(5):
-                    models[chib_id, alpha_id]=np.asarray(samples[(chib_id, alpha_id)][params])
-                    weights[chib_id, alpha_id]=np.asarray(self.combined_weights[(chib_id, alpha_id)])
+                    weights_temp=np.asarray(self.combined_weights[(chib_id, alpha_id)])
+                    weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
+                    model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
+                    cumulsize[i] = np.sum(model_size)
+
+                    models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
+                    weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
+                    i+=1
+
+            
+            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (np.reshape(model_size, 20)).astype(int), axis=0)
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
-            joined_chib_samples = np.concatenate(models, axis=0)
-            joined_chib_weights = np.concatenate(weights, axis=0)
-            models_stack = np.concatenate(joined_chib_samples, axis=0) #all models if needed
+            joined_chib_samples = models
 
             #map samples before dividing into training and validation data
 
             #TO CHANGE - needs to account for different sets of parameters
             #chirp mass original range 0 to inf
-            joined_chib_samples[:,:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,:,0], True, False, 1., 100.)
+            joined_chib_samples[:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,0], wholedataset=True, \
+                rescale_max=self.param_bounds[0][1])
 
             #mass ratio - original range 0 to 1
-            joined_chib_samples[:,:,1], max_q, _ = self.logistic(joined_chib_samples[:,:,1], True, False, 1., 1.)
+            joined_chib_samples[:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,1], wholedataset=True, \
+                rescale_max=self.param_bounds[1][1])
 
             #chieff - original range -0.5 to +1
-            joined_chib_samples[:,:,2] = np.arctanh(joined_chib_samples[:,:,2])
+            joined_chib_samples[:,2] = np.arctanh(joined_chib_samples[:,2])
 
             #redshift - original range 0 to inf
-            joined_chib_samples[:,:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,:,3], True, False, 1., 10.)
+            joined_chib_samples[:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,3],wholedataset=True, \
+                rescale_max=self.param_bounds[3][1])
 
-            #keep samples seperated by model id (combined chi_b and alpha id) until validation samples are removed, then concatenate
-            train_models = np.delete(joined_chib_samples, removed_model_id, 0) #removes samples from validation models
-            train_weights = np.delete(joined_chib_weights, removed_model_id, 0) #removes weights from validation models
-            train_models_stack = np.concatenate(train_models, axis=0)
-
-            validation_model = joined_chib_samples[removed_model_id,:,:]
-            validation_weights = joined_chib_weights[removed_model_id,:]
-            validation_models_stack = np.concatenate(validation_model, axis=0)
-            
-            train_weights = np.reshape(train_weights,(-1,1))
-            validation_weights = np.reshape(validation_weights,(-1,1))
+            weights = np.reshape(weights,(-1,1))
+            print(all_chi_b_alphas.shape)
+            train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
+                    train_test_split(joined_chib_samples, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
 
         #concatenate data and weights and hyperparams
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
 
         #save mapping constants
-        mappings = np.asarray([max_logit_mchirp, max_mchirp, max_q, None, max_logit_z, max_z])
+        mappings = np.asarray([max_logit_mchirp, max_mchirp, max_logit_q, max_q, max_logit_z, max_z])
         np.save(f'{filepath}{self.channel_label}_mappings.npy',mappings)
         
         return(training_data, val_data, mappings)
@@ -454,33 +462,28 @@ class FlowModel(Model):
         """
         mapped_data = np.zeros((np.shape(data)[0],np.shape(data)[1],np.shape(data)[2]))
 
-        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], True, False, self.mappings[0], self.mappings[1])
-        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], True, False, self.mappings[2])
+        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, self.mappings[0], self.mappings[1])
+        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, self.mappings[2], self.mappings[3])
         mapped_data[:,:,2]= np.arctanh(data[:,:,2])
-        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], True, False, self.mappings[4], self.mappings[5])
+        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], False, self.mappings[4], self.mappings[5])
 
         return mapped_data
 
 
-    def logistic(self, data,rescaling=False, wholedataset=True, max =1, rescale_max=1):
-        #Logistically maps sample in non-logistsic space
-        #input is [Nsamps] shape array
-        #if the whole training set is passed to the function, this determines the maximum rescaling values
+    def logistic(self, data, wholedataset, max =1, rescale_max=1):
+        """
+        Logistically maps sample in non-logistsic space
+        input is [Nsamps] shape array
+        if the whole training set is passed to the function, this determines the maximum rescaling values
+        """
 
-        #rescales samples so that they lie between 0 to 1
-        if rescaling:
-            if wholedataset:
-                rescale_max = np.max(data) + 0.01
-            else:
-                rescale_max = rescale_max
-            d = data/rescale_max
-        else:
-            rescale_max = None
-            d = data
+        #rescales samples so that they lie between 0 to 1, according to the upper bound of the parameter space
+        rescale_max = rescale_max
+        d = data/rescale_max
         
         #sample must be within bounds for logistic function to return definite value
-        #if d.any() <=0 or d >=1:
-        #    raise Exception('Data out of bounds for logistic mapping')
+        if np.logical_or(d <= 0, d >= 1).any():
+            raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
         d = logit(d)
@@ -502,7 +505,7 @@ class FlowModel(Model):
 
     def train(self, lr, epochs, batch_no, filepath, channel):
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
-        save_filename = f'{filepath}{channel}.pt'
+        save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data)
 
     def load_model(self, filepath, channel):

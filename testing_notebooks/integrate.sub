@@ -1,0 +1,19 @@
+# Typical submit file options
+universe = vanilla
+log = $(Cluster).$(Process).log
+error = $(Cluster).$(Process).err
+output = $(Cluster).$(Process).out
+
+# Fill in with your own script, arguments and input files
+# Note that you don't need to transfer any software
+executable = /data/wiay/2297403c/amaze_model_selection/AMAZE_model_selection/conda/envs/amaze
+arguments = integrate
+transfer_input_files = 
+
+# Resource requirements
+request_cpus = 1
+request_memory = 2GB
+request_disk = 4GB
+
+# Number of jobs
+queue 1
