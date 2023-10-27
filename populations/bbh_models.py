@@ -153,6 +153,7 @@ def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitiv
             raise ValueError('The number of bins specified does not match the shape of the number of channels')
         for i, chnl in enumerate(tqdm(channels)):
             popsynth_outputs = read_hdf5(file_path, chnl)
+            print(no_bins[i])
             flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable, no_bins=no_bins[i])
         return deepest_models, flow_models
     else:
