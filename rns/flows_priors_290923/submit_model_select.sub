@@ -15,7 +15,7 @@ request_cpus = 1
 request_memory = 2GB
 request_disk = 4GB
 
-#request_gpus = 1
+request_gpus = 1
 #require_gpus = (GlobalMemoryMb - (MemoryUsage?:0) > 10000 )
 
 # Number of jobs

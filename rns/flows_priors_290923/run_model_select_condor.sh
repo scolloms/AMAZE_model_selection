@@ -12,8 +12,7 @@ flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/flow_mod
 	--verbose \
         --channels 'CHE' 'GC' 'NSC' 'SMT' \
         --use-flows \
-        --train-flows True\
-        --device 'cpu' \
+        --device cuda:0 \
         --sensitivity 'midhighlatelow_network' \
         --save-samples \
         --make-plots \
