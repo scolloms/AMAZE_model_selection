@@ -135,9 +135,9 @@ posteriors!".format(self.posterior_name))
 
         # remove the burnin -- this removes some hyperpost samples at the start of the run before sampler equilibrates
         burnin_steps = int(self.nsteps * self.fburnin)
-        self.Nsteps_final = self.nsteps - burnin_steps
-        samples = sampler.chain[:,burnin_steps:,:] #chain array is number of chain, point in chain, value at that point (says in model_select?)
-        lnprb = sampler.lnprobability[:,burnin_steps:]
+        self.Nsteps_final = self.nsteps #- burnin_steps
+        samples = sampler.chain#[:,burnin_steps:,:] #chain array is number of chain, point in chain, value at that point (says in model_select?)
+        lnprb = sampler.lnprobability#[:,burnin_steps:]
 
         # synthesize last betas, since they sum to unity
         last_betas = (1.0-np.sum(samples[...,self.Nhyper:], axis=2))
