@@ -180,7 +180,7 @@ class NFlow():
         plt.savefig(f'{filename}loss.pdf')
         pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
 
-    def sample(self, no_samples, conditional):
+    def sample(self, conditional,no_samples):
         """
         Pull samples from flow given one pair of population hyperparameters
 

@@ -373,9 +373,14 @@ class FlowModel(Model):
         """
         Samples Flow
         """
-        #tile conditional first
-        conditional = np.repeat(conditional, N)
-        samps = self.flow.sample(N,conditional)
+        logit_samps = self.flow.sample(N,conditional)
+
+        #map samples back from logit space
+        samps = np.zeros(np.shape(logit_samps))
+        samps[:,0] = self.expistic(logit_samps[:,0], self.mappings[0], self.mappings[1])
+        samps[:,1] = self.expistic(logit_samps[:,1], self.mappings[2], self.mappings[3])
+        samps[:,2] = np.tanh(logit_samps[:,2])
+        samps[:,3] = self.expistic(logit_samps[:,3], self.mappings[4], self.mappings[5])
         return samps
 
     def __call__(self, data, conditional_hp_idxs, prior_pdf=None, proc_idx=None, return_dict=None):
@@ -428,6 +433,8 @@ class FlowModel(Model):
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) - np.log(prior_pdf)
+        print('likelihood per samp')
+        print(likelihoods_per_samp)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
@@ -436,6 +443,8 @@ class FlowModel(Model):
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
+        print('likelihood')
+        print(likelihood)
         # store value for multiprocessing
         if return_dict is not None:
             return_dict[proc_idx] = likelihood
@@ -483,9 +492,6 @@ class FlowModel(Model):
         
         #sample must be within bounds for logistic function to return definite value
         if np.logical_or(d <= 0, d >= 1).any():
-            print(self.channel_label)
-            print(rescale_max)
-            print(np.max(data))
             raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
@@ -518,7 +524,6 @@ class FlowModel(Model):
             self.mappings[self.mappings==None] = 1.001
         else:
             self.mappings[self.mappings==None] = 1.
-        print(self.mappings)
 
 
     ######CURRENTLY don't worry about functions below here - theyre used for plotting or simulated events
