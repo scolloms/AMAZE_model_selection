@@ -13,6 +13,7 @@ from scipy.special import logsumexp
 import emcee
 from emcee import EnsembleSampler
 
+
 _valid_samplers = {'emcee': EnsembleSampler}
 
 _sampler = 'emcee'
@@ -220,6 +221,8 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows):
             #LSE over channels
             #keep lnprob as shape [Nobs]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs, prior_pdf=prior_pdf)], axis=0)
+            print('lnprob')
+            print(lnprob)
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
@@ -229,10 +232,14 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows):
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
+            print('lnprob')
+            print(lnprob)
             alpha += beta * smdl.alpha
 
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
+    print('(lnprob-np.log(alpha)).sum()')
+    print((lnprob-np.log(alpha)).sum())
     return (lnprob-np.log(alpha)).sum()
 
 
