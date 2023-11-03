@@ -1,10 +1,7 @@
 import scipy
 import pandas as pd
 import numpy as np
-import h5py
-import torch
-import time
-from scipy.special import logsumexp
+from tqdm import tqdm
 
 import sys
 
@@ -28,17 +25,17 @@ file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/model
 gw_path = '/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events'
 observations, obsdata, p_theta, events = gw_obs.generate_observations(params, gw_path, \
                                             100, 'posteriors', None)
-channels = ['CE','CHE','GC','NSC','SMT']
+channels = ['CE']
 
-model_names, flow = read_models.get_models(file_path, channels, params, use_flows=True, device='cpu')
+model_names, flow = read_models.get_models(file_path, channels, params, use_flows=True, device='cpu', no_bins=[5])
 
-flow_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/flow_models/cosmo_weights/newmappings_2/"
+flow_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/rns/flows_271023/flows_271023/flow_models/"
 
 
-for chnl in channels:
+for chnl in tqdm(channels):
     flow[chnl].load_model(flow_path, chnl)
     #logprob args: param_grid, mapped_param_grid, flow['CE'].mappings, conds
     flow = flow[chnl]
-    int =scipy.integrate.nquad(f, [[0.,100.],[0.,1.],[-1.,1.],[0.,10.]], args=None, opts={'epsrel': 0.1, 'epsabs': 0.1})
+    int =scipy.integrate.nquad(f, [[0.,100.],[0.,1.],[-1.,1.],[0.,10.]], args=None, opts={'epsrel': 0.5, 'epsabs': 0.5})
     print(chnl)
     print(int)
