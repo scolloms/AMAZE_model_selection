@@ -4,7 +4,7 @@
 
 model_path="/data/wiay/2297403c/models_reduced.hdf5"
 gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events"
-flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/training_flows/Flows_011223/flow_model/"
+flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/training_flows/Flows_011223_GPU/flow_model/"
 
 /data/wiay/2297403c/conda_envs/amaze/bin/python ../../../model_select --file-path ${model_path} \
         --model0 'gwobs' \
