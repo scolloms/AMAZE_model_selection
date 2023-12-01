@@ -10,7 +10,7 @@ flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/trai
         --model0 'gwobs' \
         --gw-path ${gw_path} \
         --flow-model-filename ${flow_path} \
-	    --verbose \
+	--verbose \
         --channels 'CE' 'CHE' 'GC' 'NSC' 'SMT' \
         --epochs 1500 1000 1000 1000 1000 \
         --spline-bins 5 4 4 4 4 \
