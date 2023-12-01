@@ -109,7 +109,7 @@ class NFlow():
                 #sets flow optimisers gradients to zero
                 optimiser.zero_grad()
                 #calculate the training loss function for flow as -log_prob
-                loss = -(xweights*self.network.log_prob(x_train, conditional=x_conditional)).mean()
+                loss = -(xweights*self.network.log_prob(x_train, conditional=x_conditional)).mean().to(self.device)
                 #computes gradient of flow network parameters
                 loss.backward()
                 #steps optimtiser down gradient of loss surface
@@ -129,7 +129,7 @@ class NFlow():
                 #evaluate flow parameters
                 self.network.eval()
                 #calculate flow validation loss
-                val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean().numpy()
+                val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean().to(self.device)
                 total_val_loss=val_loss_f
                 self.history['val'].append(total_val_loss)#save the loss value of the training data
 
@@ -232,7 +232,7 @@ class NFlow():
         batched_samples = training_samples[random_samples,:(self.no_params)]
 
         #reshape tensors
-        xdata=torch.from_numpy(batched_samples.astype(np.float32))
+        xdata=torch.from_numpy(batched_samples.astype(np.float32)).to(self.device)
         #xhyperparams = np.concatenate(batched_hp_pairs)
         xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32)).to(self.device)
         xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
@@ -262,7 +262,7 @@ class NFlow():
 
         #reshape
         xval=torch.from_numpy(validation_samples.astype(np.float32)).to(self.device)
-        xhyperparams = torch.from_numpy(validation_hp_pairs.astype(np.float32)) 
+        xhyperparams = torch.from_numpy(validation_hp_pairs.astype(np.float32)).to(self.device)
         xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
         xweights = torch.from_numpy(val_weights.astype(np.float32)).to(self.device)
         return(xval, xhyperparams, xweights)
