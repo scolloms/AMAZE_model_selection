@@ -158,8 +158,8 @@ class NFlow():
         #loss plot
         plt.rcParams.update({'font.size': 10})
         fig, ax = plt.subplots(figsize = (10,5))
-        ax.plot(self.history['val'][5:], label = 'Val loss', color='tab:orange')
-        ax.plot(self.history['train'][5:], label = 'Train loss', color='tab:blue')
+        ax.plot(self.history['val'][5:].cpu(), label = 'Val loss', color='tab:orange')
+        ax.plot(self.history['train'][5:].cpu(), label = 'Train loss', color='tab:blue')
         ax.set_ylabel('Loss', fontsize=10)
         ax.set_xlabel('Epochs', fontsize=10)
         ax.tick_params(axis='both', labelsize=10)
@@ -169,8 +169,8 @@ class NFlow():
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
-        valloss = np.asarray(self.history['val'][1:])
-        trainloss = np.asarray(self.history['train'][1:])
+        valloss = np.asarray(self.history['val'][1:].cpu())
+        trainloss = np.asarray(self.history['train'][1:].cpu())
         axins.plot(valloss, color='tab:orange')
         axins.plot(trainloss, color='tab:blue')
         axins.set_xscale('log')
