@@ -324,7 +324,7 @@ class NFlow():
         mapped_sample = mapped_sample.reshape(-1,self.no_params)
 
         #removed 'None' that was stand in for secondary q mapping
-        mappings=mappings[mappings != None]
+        #mappings=mappings[mappings != None]
 
         with torch.no_grad():
             log_prob = self.network.log_prob(mapped_sample, hyperparams)
