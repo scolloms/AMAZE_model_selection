@@ -56,7 +56,7 @@ argp.add_argument("--name", type=str, default=None, help="Use this as the stem f
 argp.add_argument("--flow-model-filename", type=str, default=None, help="saving/loading flow models. Default=None.")
 argp.add_argument("--train-flows", action="store_true", help="If true trains flow models for each model, if false load models. Default=False.")
 argp.add_argument("--lr", type=float, default='0.001', help="Learning rate to train flow models. Default=0.001.")
-argp.add_argument("--epochs", type=int, default='300', help="Epochs to train flow models. Default=300.")
+argp.add_argument("--epochs", nargs="+", default=[1000,500,500,500,500], help="Epochs to train flow models. Default=[1000,500,500,500,500].")
 argp.add_argument("--spline-bins", nargs="+", default=[4,4,4,4,4], help="Number of bins to use in Coupling Spline flows. List, must be same length as channels. Default=4.")
 argp.add_argument("--batch-no", type=int, default='10', help="Number of batches to train flow models. Default=10.")
 argp.add_argument("--device", type=str, default='cpu', help="Device to run model select on. Default=cpu, otherwise choose cuda:X where X is the slot of the GPU.")
@@ -332,9 +332,9 @@ else:
 if use_flows==True:
     if verbose:
         print_both(print_file, 'Training/Loading flows')
-    for channel in channels:
+    for i, channel in enumerate(channels):
         if args.train_flows == True:
-            pop_models[channel].train(args.lr, args.epochs, args.batch_no, args.flow_model_filename, channel)
+            pop_models[channel].train(args.lr, args.epochs[i], args.batch_no, args.flow_model_filename, channel)
         else:
             pop_models[channel].load_model(args.flow_model_filename, channel)
 else:
