@@ -109,7 +109,7 @@ class NFlow():
                 #sets flow optimisers gradients to zero
                 optimiser.zero_grad()
                 #calculate the training loss function for flow as -log_prob
-                loss = -(xweights*self.network.log_prob(x_train, conditional=x_conditional)).mean().to(self.device)
+                loss = -(xweights*self.network.log_prob(x_train, conditional=x_conditional)).mean()
                 #computes gradient of flow network parameters
                 loss.backward()
                 #steps optimtiser down gradient of loss surface
@@ -119,7 +119,7 @@ class NFlow():
 
             #track and average losses
             train_loss /= n_batches
-            self.history['train'].append(train_loss.cpu())
+            self.history['train'].append(train_loss)
             
             # Validate
             with torch.no_grad(): #disables gradient caluclation
@@ -129,9 +129,9 @@ class NFlow():
                 #evaluate flow parameters
                 self.network.eval()
                 #calculate flow validation loss
-                val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean().to(self.device)
+                val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean()
                 total_val_loss=val_loss_f
-                self.history['val'].append(total_val_loss.cpu())#save the loss value of the training data
+                self.history['val'].append(total_val_loss)#save the loss value of the training data
 
             #print history
             sys.stdout.write(
