@@ -271,7 +271,7 @@ class NFlow():
         """
         Load pre-trained flow from saved model
         """
-        self.network.load_state_dict(torch.load(filename))
+        self.network.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))
         self.network.eval()
 
     def log_jacobian(self,sample, mappings):
