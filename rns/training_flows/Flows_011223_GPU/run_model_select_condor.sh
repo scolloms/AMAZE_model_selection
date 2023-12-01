@@ -6,7 +6,7 @@ model_path="/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/mode
 gw_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events"
 flow_path="./flow_model/"
 
-python /data/wiay/2297403c/conda_envs/amaze/bin/python ../../../model_select --file-path ${model_path} \
+/data/wiay/2297403c/conda_envs/amaze/bin/python ../../../model_select --file-path ${model_path} \
         --model0 'gwobs' \
         --gw-path ${gw_path} \
         --flow-model-filename ${flow_path} \
