@@ -334,7 +334,7 @@ if use_flows==True:
         print_both(print_file, 'Training/Loading flows')
     for i, channel in enumerate(channels):
         if args.train_flows == True:
-            pop_models[channel].train(args.lr, args.epochs[i], args.batch_no, args.flow_model_filename, channel)
+            pop_models[channel].train(args.lr, int(args.epochs[i]), args.batch_no, args.flow_model_filename, channel)
         else:
             pop_models[channel].load_model(args.flow_model_filename, channel)
 else:
