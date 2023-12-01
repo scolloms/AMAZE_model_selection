@@ -119,7 +119,7 @@ class NFlow():
 
             #track and average losses
             train_loss /= n_batches
-            self.history['train'].append(train_loss)
+            self.history['train'].append(train_loss.cpu())
             
             # Validate
             with torch.no_grad(): #disables gradient caluclation
@@ -131,7 +131,7 @@ class NFlow():
                 #calculate flow validation loss
                 val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean().to(self.device)
                 total_val_loss=val_loss_f
-                self.history['val'].append(total_val_loss)#save the loss value of the training data
+                self.history['val'].append(total_val_loss.cpu())#save the loss value of the training data
 
             #print history
             sys.stdout.write(
@@ -158,8 +158,8 @@ class NFlow():
         #loss plot
         plt.rcParams.update({'font.size': 10})
         fig, ax = plt.subplots(figsize = (10,5))
-        ax.plot(self.history['val'][5:].cpu(), label = 'Val loss', color='tab:orange')
-        ax.plot(self.history['train'][5:].cpu(), label = 'Train loss', color='tab:blue')
+        ax.plot(self.history['val'][5:], label = 'Val loss', color='tab:orange')
+        ax.plot(self.history['train'][5:], label = 'Train loss', color='tab:blue')
         ax.set_ylabel('Loss', fontsize=10)
         ax.set_xlabel('Epochs', fontsize=10)
         ax.tick_params(axis='both', labelsize=10)
@@ -169,8 +169,8 @@ class NFlow():
 
         #inset log plot
         axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
-        valloss = np.asarray(self.history['val'][1:].cpu())
-        trainloss = np.asarray(self.history['train'][1:].cpu())
+        valloss = np.asarray(self.history['val'][1:])
+        trainloss = np.asarray(self.history['train'][1:])
         axins.plot(valloss, color='tab:orange')
         axins.plot(trainloss, color='tab:blue')
         axins.set_xscale('log')
