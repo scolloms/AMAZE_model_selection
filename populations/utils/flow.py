@@ -115,7 +115,7 @@ class NFlow():
                 #steps optimtiser down gradient of loss surface
                 optimiser.step()
                 #track flow losses
-                train_loss += loss.item()
+                train_loss += loss.cpu().item()
 
             #track and average losses
             train_loss /= n_batches
@@ -130,7 +130,7 @@ class NFlow():
                 self.network.eval()
                 #calculate flow validation loss
                 val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean()
-                total_val_loss=val_loss_f
+                total_val_loss=val_loss_f.cpu().numpy() 
                 self.history['val'].append(total_val_loss)#save the loss value of the training data
 
             #print history
