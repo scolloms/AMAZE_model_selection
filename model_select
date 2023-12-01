@@ -231,8 +231,8 @@ if not gwobs:
             smdl = model.split('/',1)[1]
             # print info about model0
             if (smdl in args.model0):
-                model0[channel] = getFromDict(kde_models, model.split('/'))
-                model0_detectable[channel] = getFromDict(kde_models_detectable, model.split('/'))
+                model0[channel] = getFromDict(pop_models, model.split('/'))
+                model0_detectable[channel] = getFromDict(pop_models_detectable, model.split('/'))
 
     # set branching fractions as attributes in KDEModels
     for idx, channel in enumerate(channels):
