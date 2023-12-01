@@ -286,10 +286,10 @@ class FlowModel(Model):
                 rescale_max=self.param_bounds[0][1])
             if channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
-                models_stack[:,1], max_q, max_logit_q = self.logistic(models_stack[:,1],wholedataset=True, \
+                models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1]+0.001)
             else:
-                models_stack[:,1], max_q, max_logit_q = self.logistic(models_stack[:,1],wholedataset=True, \
+                models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
             models_stack[:,2] = np.arctanh(models_stack[:,2])
             models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
