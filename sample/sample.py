@@ -136,9 +136,9 @@ posteriors!".format(self.posterior_name))
 
         # remove the burnin -- this removes some hyperpost samples at the start of the run before sampler equilibrates
         burnin_steps = int(self.nsteps * self.fburnin)
-        self.Nsteps_final = self.nsteps #- burnin_steps
-        samples = sampler.chain#[:,burnin_steps:,:] #chain array is number of chain, point in chain, value at that point (says in model_select?)
-        lnprb = sampler.lnprobability#[:,burnin_steps:]
+        self.Nsteps_final = self.nsteps - burnin_steps
+        samples = sampler.chain[:,burnin_steps:,:] #chain array is number of chain, point in chain, value at that point (says in model_select?)
+        lnprb = sampler.lnprobability[:,burnin_steps:]
 
         # synthesize last betas, since they sum to unity
         last_betas = (1.0-np.sum(samples[...,self.Nhyper:], axis=2))
@@ -197,7 +197,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows):
         hyperparam_idxs.append(int(np.floor(x[hyper_idx])))
         model_list.append(submodels_dict[hyper_idx][int(np.floor(x[hyper_idx]))]) #finds where walker is in hyperparam space
 
-    # get detectable betas
+    # get betas
     betas = np.asarray(x[len(submodels_dict):])
     betas = np.append(betas, 1-np.sum(betas))
 
@@ -221,8 +221,6 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows):
             #LSE over channels
             #keep lnprob as shape [Nobs]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs, prior_pdf=prior_pdf)], axis=0)
-            print('lnprob')
-            print(lnprob)
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
@@ -232,14 +230,10 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows):
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
-            print('lnprob')
-            print(lnprob)
             alpha += beta * smdl.alpha
 
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
-    print('(lnprob-np.log(alpha)).sum()')
-    print((lnprob-np.log(alpha)).sum())
     return (lnprob-np.log(alpha)).sum()
 
 
@@ -259,9 +253,11 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
     log_prior = lnp(x, submodels_dict, _concentration)
     if not np.isfinite(log_prior):
         return log_prior
+    print(log_prior)
 
     # Likelihood
     log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows)
+    print(log_like)
 
     return log_like + log_prior #evidence is divided out
 
