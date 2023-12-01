@@ -346,7 +346,7 @@ class FlowModel(Model):
             joined_chib_samples[:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,1], wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
 
-            #chieff - original range -0.5 to +1
+            #chieff - original range -1 to +1
             joined_chib_samples[:,2] = np.arctanh(joined_chib_samples[:,2])
 
             #redshift - original range 0 to inf
@@ -354,7 +354,6 @@ class FlowModel(Model):
                 rescale_max=self.param_bounds[3][1])
 
             weights = np.reshape(weights,(-1,1))
-            print(all_chi_b_alphas.shape)
             train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
                     train_test_split(joined_chib_samples, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
 
@@ -433,8 +432,10 @@ class FlowModel(Model):
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) - np.log(prior_pdf)
-        print('likelihood per samp')
-        print(likelihoods_per_samp)
+        #print('likelihood from flow')
+        #print(self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals))
+        #print('likelihood per samp')
+        #print(likelihoods_per_samp)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
@@ -443,8 +444,8 @@ class FlowModel(Model):
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
-        print('likelihood')
-        print(likelihood)
+        #print('likelihood')
+        #print(likelihood)
         # store value for multiprocessing
         if return_dict is not None:
             return_dict[proc_idx] = likelihood
@@ -471,10 +472,10 @@ class FlowModel(Model):
         """
         mapped_data = np.zeros((np.shape(data)[0],np.shape(data)[1],np.shape(data)[2]))
 
-        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, self.mappings[0], self.mappings[1])
-        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, self.mappings[2], self.mappings[3])
+        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
+        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
         mapped_data[:,:,2]= np.arctanh(data[:,:,2])
-        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], False, self.mappings[4], self.mappings[5])
+        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], False, max=self.mappings[4], rescale_max=self.mappings[5])
 
         return mapped_data
 

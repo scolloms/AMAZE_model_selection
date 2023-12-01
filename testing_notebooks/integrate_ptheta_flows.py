@@ -21,21 +21,18 @@ def f(mchirp, q,chieff,z):
 params = ['mchirp','q', 'chieff', 'z']
 chi_b = [0.0,0.1,0.2,0.5]
 alpha = [0.2,0.5,1.,2.,5.]
-file_path='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
-gw_path = '/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events'
-observations, obsdata, p_theta, events = gw_obs.generate_observations(params, gw_path, \
-                                            100, 'posteriors', None)
+file_path='/data/wiay/2297403c/models_reduced.hdf5'
 channels = ['CE']
 
 model_names, flow = read_models.get_models(file_path, channels, params, use_flows=True, device='cpu', no_bins=[5])
 
-flow_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/rns/flows_271023/flows_271023/flow_models/"
+flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/flows_271023/flow_models/"
 
 
 for chnl in tqdm(channels):
     flow[chnl].load_model(flow_path, chnl)
     #logprob args: param_grid, mapped_param_grid, flow['CE'].mappings, conds
     flow = flow[chnl]
-    int =scipy.integrate.nquad(f, [[0.,100.],[0.,1.],[-1.,1.],[0.,10.]], args=None, opts={'epsrel': 0.5, 'epsabs': 0.5})
+    int =scipy.integrate.nquad(f, [[0.,100.],[0.,1.],[-1.,1.],[0.,10.]], args=None, opts={'epsrel': 0.1, 'epsabs': 0.1})
     print(chnl)
     print(int)

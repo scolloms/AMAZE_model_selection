@@ -6,7 +6,7 @@ output = $(Cluster).$(Process).out
 
 # Fill in with your own script, arguments and input files
 # Note that you don't need to transfer any software
-executable = /data/wiay/2297403c/amaze_model_selection/AMAZE_model_selection/conda/envs/amaze
+executable = /data/wiay/2297403c/conda_envs/amaze/bin/python
 arguments = integrate_ptheta_flows.py
 #transfer_input_files = 
 

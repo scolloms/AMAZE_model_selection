@@ -264,11 +264,7 @@ class KDEModel(Model):
         for idx, (obs, d_pdf) in enumerate(zip(np.atleast_3d(data),data_pdf)):
             # Evaluate the KDE at the samples
             likelihood_per_samp = self.pdf(obs) / d_pdf
-            print('likelihood per samp')
-            print(np.log(likelihood_per_samp))
             likelihood[idx] += (1.0/len(obs)) * np.sum(likelihood_per_samp)
-        print('likelihood')
-        print(np.log(likelihood))
         # store value for multiprocessing
         if return_dict is not None:
             return_dict[proc_idx] = likelihood
