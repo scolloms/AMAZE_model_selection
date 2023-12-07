@@ -85,6 +85,7 @@ class NFlow():
         #(affine - s and t that shift and scale the transforms)
         #(spline - nodes used to model the distribution of CDFs)
         optimiser = torch.optim.Adam(self.network.parameters(), lr=lr, weight_decay=0)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=epochs, eta_min=0, last_epoch=- 1, verbose=False)
 
         n_epochs = epochs #number of iterations to train  - 1 epoch goes through through entire dataset
         n_batches = batch_no #number of batches of data in one iteration
@@ -94,13 +95,14 @@ class NFlow():
         best_val_loss = np.inf
 
         #record network values and outputs in dictionary as training
-        self.history = {'train': [], 'val': []}
+        self.history = {'train': [], 'val': [], 'lr': []}
 
         #training loop
         for n in range(n_epochs): 
             train_loss = 0
             #set flow into training mode
             self.network.train()
+            self.history['lr'].append(scheduler.get_last_lr())
             
             #Training
             for _ in range(n_batches):
@@ -116,6 +118,7 @@ class NFlow():
                 optimiser.step()
                 #track flow losses
                 train_loss += loss.cpu().item()
+            scheduler.step()
 
             #track and average losses
             train_loss /= n_batches
@@ -179,6 +182,14 @@ class NFlow():
         text.set_size(10)
         plt.savefig(f'{filename}loss.pdf')
         pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
+
+        fig, ax = plt.subplots(figsize = (10,5))
+        ax.plot(self.history['lr'], label = 'lr')
+        ax.set_ylabel('Learning rate', fontsize=10)
+        ax.set_xlabel('Epochs', fontsize=10)
+        plt.savefig(f'{filename}lr.pdf')
+
+
 
     def sample(self, conditional,no_samples):
         """
