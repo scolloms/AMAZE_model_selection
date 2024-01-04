@@ -19,8 +19,8 @@ scheme of GWTC-1.
 """
 
 # can specify only a subset of GW events to use by uncommenting the line below
-_events_to_use = None
-#_events_to_use = ["GW150914"]#,"GW151012","GW151226","GW170104","GW170608","GW170729","GW170809","GW170814","GW170818","GW170823"]
+#_events_to_use = None
+_events_to_use = ["GW150914", "GW151226", "GW170608", "GW190519_153544", "GW190412"]#,"GW151012","GW151226","GW170104","GW170608","GW170729","GW170809","GW170814","GW170818","GW170823"]
 
 # specify the hdf5 key for the approximant being used
 _posterior_key = "combined"
