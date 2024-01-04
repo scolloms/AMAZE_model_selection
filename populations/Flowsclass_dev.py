@@ -9,6 +9,7 @@ from functools import partial
 import warnings
 import pdb
 import time
+import wandb
 
 import numpy as np
 import scipy as sp
@@ -513,10 +514,58 @@ class FlowModel(Model):
             data *=rescale_max
         return(data)
 
-    def train(self, lr, epochs, batch_no, filepath, channel):
+    def wandb_init(self, epochs):
+        """
+        Initialises a wandb sweep and then uses a wandb agent to train a flow under that sweeps regimes
+        current process optimises the number of epochs over validation loss, 
+        the prior for the number of epochs being uniform between argument's number of epochs and 3*args.epochs
+        """
+        #setting up wandb sweep parameters
+        wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
+
+        sweep_config = {
+            'method': 'bayes'
+            }
+
+        metric = {
+            'name': 'val_loss',
+            'goal': 'minimize'   
+            }
+
+        sweep_config['metric'] = metric
+
+        parameters_dict = {
+            'lr': {
+                'value':0.001
+            },
+            'epochs': {
+                'distribution': 'int_uniform',
+                'min': epochs,
+                'max': epochs*3
+                },
+            'batch_no': {
+                'value':10
+            }
+                
+            }
+
+        sweep_config['parameters'] = parameters_dict
+
+        sweep_id = wandb.sweep(sweep_config, project=f"{self.channel_label}_epochs_sweep")
+        
+        wandb.agent(sweep_id, self.wandbtrain, count=20)
+    
+    def wandbtrain(self, config=None):
+        with wandb.init(config=config):
+            config = wandb.config
+            print(config)
+            self.train(config.lr, config.epochs, config.batch_no, "wandbtest.pt", self.channel_label, True)
+
+    def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
+
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
         save_filename = f'{filepath}{channel}'
-        self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data)
+        self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
     def load_model(self, filepath, channel):
         self.flow.load_model(f'{filepath}{channel}.pt')

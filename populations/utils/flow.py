@@ -18,8 +18,7 @@ import copy
 import torch
 from  glasflow import RealNVP, CouplingNSF
 from torch import nn
-import pdb
-import time
+import wandb
 
 
 class NFlow():
@@ -28,7 +27,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
-                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu"):
+                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu", use_wandb=False):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -79,7 +78,7 @@ class NFlow():
         self.network.to(device)
 
     #training and validation loop for the flow
-    def trainval(self, lr, epochs, batch_no, filename, training_data, val_data):
+    def trainval(self, lr, epochs, batch_no, filename, training_data, val_data, use_wandb):
 
         #set optimiser for flow, optimises flow parameters:
         #(affine - s and t that shift and scale the transforms)
@@ -152,6 +151,9 @@ class NFlow():
         self.network.load_state_dict(best_model)
         torch.save(best_model, f'{filename}.pt')
         self.plot_history(filename)
+
+        if use_wandb:
+            wandb.log({"train_loss": train_loss, "val_loss": total_val_loss})
 
     def plot_history(self,filename):
         """
