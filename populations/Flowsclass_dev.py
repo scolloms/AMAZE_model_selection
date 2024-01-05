@@ -521,6 +521,7 @@ class FlowModel(Model):
         the prior for the number of epochs being uniform between argument's number of epochs and 3*args.epochs
         """
         #setting up wandb sweep parameters
+        wandb.init(dir='/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/flow_040124_wandbtest/wandb')
         print(os.path.abspath(wandb.run.dir))
         wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
 
