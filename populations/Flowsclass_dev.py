@@ -521,8 +521,8 @@ class FlowModel(Model):
         the prior for the number of epochs being uniform between argument's number of epochs and 3*args.epochs
         """
         #setting up wandb sweep parameters
-        wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
         print(os.path.abspath(wandb.run.dir))
+        wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
 
         sweep_config = {
             'method': 'bayes'
