@@ -522,6 +522,7 @@ class FlowModel(Model):
         """
         #setting up wandb sweep parameters
         wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
+        print(os.path.abspath(wandb.run.dir))
 
         sweep_config = {
             'method': 'bayes'
