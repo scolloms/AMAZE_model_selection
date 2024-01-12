@@ -49,7 +49,7 @@ class Model(object):
 
 class KDEModel(Model):
     @staticmethod
-    def from_samples(label, samples, params, sensitivity=None, normalize=False, detectable=False, **kwargs):
+    def from_samples(label, samples, params, sensitivity=None, normalize=False, detectable=False, use_unityweights=False, **kwargs):
         """
         Generate a KDE model instance from `samples`, where `params` are \
         series in the `samples` dataframe. Additional *kwargs* can be passed \
@@ -111,7 +111,7 @@ class KDEModel(Model):
         # get KDE bandwidth, if specified in kwargs
         bandwidth = kwargs['bandwidth'] if 'bandwidth' in kwargs.keys() else _kde_bandwidth
 
-        return KDEModel(label, kde_samples, params, bandwidth, cosmo_weights, sensitivity, pdets, optimal_snrs, alpha, normalize=normalize, detectable=detectable)
+        return KDEModel(label, kde_samples, params, bandwidth, cosmo_weights, sensitivity, pdets, optimal_snrs, alpha, normalize=normalize, detectable=detectable, use_unityweights=use_unityweights)
 
 
     def __init__(self, label, samples, params, bandwidth=_kde_bandwidth, cosmo_weights=None, sensitivity=None, pdets=None, optimal_snrs=None, \

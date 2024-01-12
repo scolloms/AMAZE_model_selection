@@ -50,7 +50,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu', no_bins=4):
+    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=use_unityweights):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -83,7 +83,7 @@ class FlowModel(Model):
         FlowModel : obj
         """
 
-        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins)
+        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins, use_unityweights=use_unityweights)
 
 
     def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False):
