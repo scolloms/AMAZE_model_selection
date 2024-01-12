@@ -338,6 +338,7 @@ class FlowModel(Model):
                     weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
                     model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
                     cumulsize[i] = np.sum(model_size)
+                    print(model_size, cumulsize)
 
                     models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
                     weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
