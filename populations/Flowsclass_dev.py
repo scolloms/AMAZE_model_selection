@@ -229,7 +229,10 @@ class FlowModel(Model):
 
         #number of data points (total) for each channel
         #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
-        channel_samples = [19912038,864124,896611,582961, 4e6]
+        if use_unityweights==True:
+            channel_samples=[4e6,864124,896611,582961, 4e6]
+        else:
+            channel_samples = [19912038,864124,896611,582961, 4e6]
         self.no_binaries = int(channel_samples[channel_id])
 
         #initislises network
