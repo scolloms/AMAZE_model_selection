@@ -188,7 +188,7 @@ class FlowModel(Model):
 
                 #if not using cosmo_weights then set to None, later sets combined weights to be 1
                 if use_unityweights == True:
-                    cosmo_weights = None
+                    cosmo_weights[key] = None
 
                 # Combine the cosmological and detection weights
                 # detectable only used for plotting
@@ -202,10 +202,10 @@ class FlowModel(Model):
                     else:
                         combined_weights[key] = np.ones(len(sbml_samps))
                 else:
-                    if (cosmo_weights is not None):
-                        combined_weights = (cosmo_weights / np.sum(cosmo_weights))
+                    if (cosmo_weights[key] is not None):
+                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
                     else:
-                        combined_weights = np.ones(len(sbml_samps))
+                        combined_weights[key] = np.ones(len(sbml_samps))
                 if use_unityweights == True:
                     pass
                 else:
