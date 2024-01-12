@@ -114,7 +114,8 @@ class KDEModel(Model):
         return KDEModel(label, kde_samples, params, bandwidth, cosmo_weights, sensitivity, pdets, optimal_snrs, alpha, normalize=normalize, detectable=detectable)
 
 
-    def __init__(self, label, samples, params, bandwidth=_kde_bandwidth, cosmo_weights=None, sensitivity=None, pdets=None, optimal_snrs=None, alpha=1, normalize=False, detectable=False):
+    def __init__(self, label, samples, params, bandwidth=_kde_bandwidth, cosmo_weights=None, sensitivity=None, pdets=None, optimal_snrs=None, \
+        alpha=1, normalize=False, detectable=False, use_unityweights=False):
         super()
         self.label = label
         self.samples = samples
@@ -132,6 +133,10 @@ class KDEModel(Model):
         self.sample_range = {}
         for param in samples.keys():
             self.sample_range[param] = (samples[param].min(), samples[param].max())
+
+        #if not using cosmo_weights then set to None, later sets combined weights to be 1/no_samples
+        if use_unityweights == True:
+            cosmo_weights = None
 
         # Combine the cosmological and detection weights
         if self.detectable == True:

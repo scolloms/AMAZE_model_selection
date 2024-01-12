@@ -86,7 +86,7 @@ class FlowModel(Model):
         return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins)
 
 
-    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -186,6 +186,10 @@ class FlowModel(Model):
                 else:
                     optimal_snrs[key] = np.nan*np.ones(len(sbml_samps))
 
+                #if not using cosmo_weights then set to None, later sets combined weights to be 1
+                if use_unityweights == True:
+                    cosmo_weights = None
+
                 # Combine the cosmological and detection weights
                 # detectable only used for plotting
                 if self.detectable == True:
@@ -198,8 +202,14 @@ class FlowModel(Model):
                     else:
                         combined_weights[key] = np.ones(len(sbml_samps))
                 else:
-                    combined_weights[key] = cosmo_weights[key]
-                combined_weights[key] /= np.sum(combined_weights[key])
+                    if (cosmo_weights is not None):
+                        combined_weights = (cosmo_weights / np.sum(cosmo_weights))
+                    else:
+                        combined_weights = np.ones(len(sbml_samps))
+                if use_unityweights == True:
+                    pass
+                else:
+                    combined_weights[key] /= np.sum(combined_weights[key])
 
         #sets weights as class properties
         self.combined_weights = combined_weights
