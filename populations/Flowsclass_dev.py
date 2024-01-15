@@ -290,7 +290,6 @@ class FlowModel(Model):
             for chib_id, xb in enumerate(self.hps[0]):
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
-                print(cumulsize)
                 models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
             models_stack = np.copy(models)
@@ -338,7 +337,6 @@ class FlowModel(Model):
                     weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
                     model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
                     cumulsize[i] = np.sum(model_size)
-                    print(model_size, cumulsize)
 
                     models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
                     weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
@@ -574,8 +572,8 @@ class FlowModel(Model):
     def wandbtrain(self, config=None):
         with wandb.init(config=config):
             config = wandb.config
-            print(config)
-            self.train(config.lr, config.epochs, config.batch_no, "wandbtest", self.channel_label, True)
+            
+            self.train(config.lr, config.epochs, config.batch_no, f"{wandb.run.id}_wandb", self.channel_label, True)
 
     def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
 
