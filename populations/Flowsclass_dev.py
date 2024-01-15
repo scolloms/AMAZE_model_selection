@@ -572,6 +572,13 @@ class FlowModel(Model):
     def wandbtrain(self, config=None):
         with wandb.init(config=config):
             config = wandb.config
+            batch_size=10000
+            total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
+            device='cpu'
+            no_bins=5
+            flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
+                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+            self.flow = flow
             self.train(config.lr, config.epochs, config.batch_no, f"{wandb.run.id}_wandb", self.channel_label, True)
 
     def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
