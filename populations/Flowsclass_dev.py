@@ -572,12 +572,12 @@ class FlowModel(Model):
     def wandbtrain(self, config=None):
         with wandb.init(config=config):
             config = wandb.config
-            
             self.train(config.lr, config.epochs, config.batch_no, f"{wandb.run.id}_wandb", self.channel_label, True)
 
     def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
 
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
+        print(training_data[1,2],self.mappings)
         save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
