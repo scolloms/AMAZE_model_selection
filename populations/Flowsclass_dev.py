@@ -535,9 +535,9 @@ class FlowModel(Model):
         the prior for the number of epochs being uniform between argument's number of epochs and 3*args.epochs
         """
         #setting up wandb sweep parameters
-        wandb.init(dir='/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/flow_040124_wandbtest/wandb')
-        print(os.path.abspath(wandb.run.dir))
-        wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
+        #wandb.init()#dir='/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/flow_040124_wandbtest/wandb')
+        #print(os.path.abspath(wandb.run.dir))
+        #wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
 
         sweep_config = {
             'method': 'bayes'
@@ -575,7 +575,7 @@ class FlowModel(Model):
         with wandb.init(config=config):
             config = wandb.config
             print(config)
-            self.train(config.lr, config.epochs, config.batch_no, "wandbtest.pt", self.channel_label, True)
+            self.train(config.lr, config.epochs, config.batch_no, "wandbtest", self.channel_label, True)
 
     def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
 
