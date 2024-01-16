@@ -445,10 +445,6 @@ class FlowModel(Model):
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) - np.log(prior_pdf)
-        #print('likelihood from flow')
-        #print(self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals))
-        #print('likelihood per samp')
-        #print(likelihoods_per_samp)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
@@ -457,8 +453,6 @@ class FlowModel(Model):
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
-        #print('likelihood')
-        #print(likelihood)
         # store value for multiprocessing
         if return_dict is not None:
             return_dict[proc_idx] = likelihood
@@ -533,9 +527,6 @@ class FlowModel(Model):
         the prior for the number of epochs being uniform between argument's number of epochs and 3*args.epochs
         """
         #setting up wandb sweep parameters
-        #wandb.init()#dir='/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/flow_040124_wandbtest/wandb')
-        #print(os.path.abspath(wandb.run.dir))
-        #wandb.login(key="1e59fc914a91aa02638203d71b32bb84ff187d54")
 
         sweep_config = {
             'method': 'bayes'
@@ -553,14 +544,29 @@ class FlowModel(Model):
                 'value':0.001
             },
             'epochs': {
-                'distribution': 'int_uniform',
+                """'distribution': 'int_uniform',
                 'min': epochs,
-                'max': epochs*3
-                },
+                'max': epochs*3"""
+                'value':10000
+            },
             'batch_no': {
                 'value':10
-            }
-                
+            },
+            'no_trans': {
+                'distribution': 'int_uniform',
+                'min': 2,
+                'max': 8
+            },
+            'no_neurons': {
+                'distribution': 'int_uniform',
+                'min': 12,
+                'max': 128
+            },
+            'no_bins': {
+                'distribution': 'int_uniform',
+                'min': 3,
+                'max': 8
+            }                
             }
 
         sweep_config['parameters'] = parameters_dict
@@ -572,19 +578,19 @@ class FlowModel(Model):
     def wandbtrain(self, config=None):
         with wandb.init(config=config):
             config = wandb.config
+
             batch_size=10000
             total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
-            device='cpu'
-            no_bins=5
-            flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+            device='cuda:0'
+
+            flow = NFlow(config.no_trans, config.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
+                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=config.no_bins)
             self.flow = flow
             self.train(config.lr, config.epochs, config.batch_no, f"wandb_models/{wandb.run.id}_wandb", self.channel_label, True)
 
     def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
 
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
-        print(training_data[1,2],self.mappings)
         save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
