@@ -1,10 +1,10 @@
 #! /bin/bash
 #runs model select with cpu, with flows, and preset file paths, CE channel training
-#training flow models on GPU and then inference with all events
+#training flow models for +1000 epochs with cosine annealing
 
 model_path="/data/wiay/2297403c/models_reduced.hdf5"
 gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events"
-flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flows_011223/flow_models_correctnonCEq/"
+flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flows_071223_annealing/flow_model/"
 
 /data/wiay/2297403c/conda_envs/amaze/bin/python ../../model_select --file-path ${model_path} \
         --model0 'gwobs' \
@@ -12,14 +12,13 @@ flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flow
         --flow-model-filename ${flow_path} \
 	--verbose \
         --channels 'CE' 'CHE' 'GC' 'NSC' 'SMT' \
-        --epochs 1500 1000 1000 1000 1000 \
-        --spline-bins 5 4 4 5 4 \
-        --train-flows \
+        --epochs 2500 2000 2000 2000 2000 \
+        --spline-bins 5 4 4 5 5 \
         --use-flows \
+        --train-flows \
         --device cuda:0 \
         --sensitivity 'midhighlatelow_network' \
         --save-samples \
         --make-plots \
         --prior 'p_theta' \
-        --name 'correctnonCEq' \
         --random-seed 8675309
