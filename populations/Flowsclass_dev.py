@@ -544,9 +544,6 @@ class FlowModel(Model):
                 'value':0.001
             },
             'epochs': {
-                """'distribution': 'int_uniform',
-                'min': epochs,
-                'max': epochs*3"""
                 'value':10000
             },
             'batch_no': {
