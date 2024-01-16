@@ -571,7 +571,7 @@ class FlowModel(Model):
 
         sweep_config['parameters'] = parameters_dict
 
-        sweep_id = wandb.sweep(sweep_config, project=f"{self.channel_label}_epochs_sweep")
+        sweep_id = wandb.sweep(sweep_config, project=f"{self.channel_label}_transneubins_sweep")
         
         wandb.agent(sweep_id, self.wandbtrain, count=20)
     
