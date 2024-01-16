@@ -110,12 +110,14 @@ class NFlow():
                 #sets flow optimisers gradients to zero
                 optimiser.zero_grad()
                 #calculate the training loss function for flow as -log_prob
-                loss = -(xweights*self.network.log_prob(x_train, conditional=x_conditional)).mean()
+                unweighted_KL = self.network.log_prob(x_train, conditional=x_conditional)
+                loss = -(xweights*unweighted_KL).mean()
                 #computes gradient of flow network parameters
                 loss.backward()
                 #steps optimtiser down gradient of loss surface
                 optimiser.step()
                 #track flow losses
+                unweighted_KL_train += unweighted_KL.cpu().item()
                 train_loss += loss.cpu().item()
             scheduler.step()
 
@@ -130,10 +132,14 @@ class NFlow():
                 
                 #evaluate flow parameters
                 self.network.eval()
+
                 #calculate flow validation loss
-                val_loss_f = - (x_weights_val*self.network.log_prob(x_val, conditional=x_conditional_val)).mean()
-                total_val_loss=val_loss_f.cpu().numpy() 
-                self.history['val'].append(total_val_loss)#save the loss value of the training data
+                unweighted_KL_loss = self.network.log_prob(x_val, conditional=x_conditional_val)
+                val_loss = - (x_weights_val*unweighted_KL_loss).mean()
+                total_val_loss=val_loss.cpu().numpy() 
+                total_unweighted_KL_val = unweighted_KL_loss.cpu().numpy()
+                #save the loss value of the training data
+                self.history['val'].append(total_val_loss)
 
             #print history
             sys.stdout.write(
@@ -153,7 +159,7 @@ class NFlow():
         self.plot_history(filename)
 
         if use_wandb:
-            wandb.log({"train_loss": train_loss, "val_loss": total_val_loss})
+            wandb.log({"train_loss": train_loss, "val_loss": total_val_loss, "unweighted_train_KL": unweighted_KL_train, "unweighted_val_KL": total_unweighted_KL_val})
 
     def plot_history(self,filename):
         """
