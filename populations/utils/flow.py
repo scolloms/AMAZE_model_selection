@@ -99,6 +99,8 @@ class NFlow():
         #training loop
         for n in range(n_epochs): 
             train_loss = 0
+            unweighted_KL_train = 0
+
             #set flow into training mode
             self.network.train()
             self.history['lr'].append(scheduler.get_last_lr())
