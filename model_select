@@ -62,6 +62,7 @@ argp.add_argument("--batch-no", type=int, default='10', help="Number of batches 
 argp.add_argument("--device", type=str, default='cpu', help="Device to run model select on. Default=cpu, otherwise choose cuda:X where X is the slot of the GPU.")
 argp.add_argument("--use-wandb", action="store_true", help="Whether or not to use Weights and biases to run a sweep over optimising parameters of the normalising flows.")
 argp.add_argument("--use-unityweights", action="store_true", help="If true sets cosmoweights to 1 (flows) or 1/no_smdl_samples (kde) for all samples")
+argp.add_argument("--randch-weights", action="store_true", help="If true choses training and validation samples according to weights instead of a weighted KL")
 
 
 
@@ -109,7 +110,7 @@ if use_flows==True:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
     model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False,\
-        device=args.device, use_unityweights=args.use_unityweights, no_bins=args.spline_bins)
+        device=args.device, use_unityweights=args.use_unityweights, randch_weights=args.randch_weights, no_bins=args.spline_bins)
     #TO CHANGE - add detectable models?
     model_names.sort()
     hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))

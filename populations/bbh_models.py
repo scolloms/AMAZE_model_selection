@@ -87,7 +87,7 @@ def read_hdf5(path, channel):
     return(popsynth_outputs)
 
 
-def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitivity=None, normalize=False, detectable=False, device='cpu', use_unityweights=False, **kwargs):
+def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitivity=None, normalize=False, detectable=False, device='cpu', use_unityweights=False, randch_weights=False, **kwargs):
     """
     Call this to get all the models and submodels, as well
     as KDEs of these models, packed inside of dictionaries labelled in the
@@ -154,7 +154,7 @@ def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitiv
         for i, chnl in enumerate(tqdm(channels)):
             popsynth_outputs = read_hdf5(file_path, chnl)
             flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable, no_bins=int(no_bins[i]),\
-                            use_unityweights=use_unityweights)
+                            use_unityweights=use_unityweights, randch_weights=randch_weights)
         return deepest_models, flow_models
     else:
         kde_models = {}

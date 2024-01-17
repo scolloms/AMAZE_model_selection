@@ -50,7 +50,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False):
+    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -83,10 +83,11 @@ class FlowModel(Model):
         FlowModel : obj
         """
 
-        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins, use_unityweights=use_unityweights)
+        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins,\
+            use_unityweights=use_unityweights, randch_weights=randch_weights)
 
 
-    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -237,7 +238,7 @@ class FlowModel(Model):
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins, randch_weights=randch_weights)
         self.flow = flow
 
 
