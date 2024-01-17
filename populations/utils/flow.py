@@ -119,7 +119,7 @@ class NFlow():
                 #steps optimtiser down gradient of loss surface
                 optimiser.step()
                 #track flow losses
-                unweighted_KL_train += unweighted_KL.cpu().item()
+                unweighted_KL_train += -unweighted_KL.mean().cpu().item()
                 train_loss += loss.cpu().item()
             scheduler.step()
 
@@ -139,7 +139,7 @@ class NFlow():
                 unweighted_KL_loss = self.network.log_prob(x_val, conditional=x_conditional_val)
                 val_loss = - (x_weights_val*unweighted_KL_loss).mean()
                 total_val_loss=val_loss.cpu().numpy() 
-                total_unweighted_KL_val = unweighted_KL_loss.cpu().numpy()
+                total_unweighted_KL_val = -unweighted_KL_loss.mean().cpu().numpy()
                 #save the loss value of the training data
                 self.history['val'].append(total_val_loss)
 
