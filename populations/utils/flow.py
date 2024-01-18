@@ -250,7 +250,7 @@ class NFlow():
         #2D channel has seperate populations for training and validation data, 1D mixes up samples
         if self.cond_inputs >=2:
             if self.randch_weights==True:
-                weights=training_samples[random_samples,-3]/np.sum(training_samples[random_samples,-3])
+                weights=training_samples[:,-3]/np.sum(training_samples[:,-3])
                 random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)), p=weights)
             else:
                 random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
@@ -258,7 +258,7 @@ class NFlow():
             batch_weights = training_samples[random_samples,-3]
         else:
             if self.randch_weights==True:
-                weights=training_samples[random_samples,-2]/np.sum(training_samples[random_samples,-2])
+                weights=training_samples[:,-2]/np.sum(training_samples[:,-2])
                 random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)), p=weights)
             else:
                 random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
