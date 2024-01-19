@@ -291,14 +291,15 @@ class NFlow():
         
 
         if self.cond_inputs >=2:
-            val_weights = validation_data[random_samples,-3]
+            val_weights = validation_data[:,-3]
         else:
-            val_weights = validation_data[random_samples,-2]
+            val_weights = validation_data[:,-2]
 
         if self.randch_weights==True:
             random_samples = np.random.choice(np.shape(validation_data)[0], size=(int(self.batch_size)), p=val_weights/np.sum(val_weights))
         else:
             random_samples = np.random.choice(np.shape(validation_data)[0], size=(int(self.batch_size)))
+            val_weights = val_weights[random_samples]
         validation_hp_pairs = validation_data[random_samples,-self.cond_inputs:]
         validation_samples = validation_data[random_samples,:self.no_params]
         #reshape
