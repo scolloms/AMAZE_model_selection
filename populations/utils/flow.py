@@ -114,7 +114,7 @@ class NFlow():
                 optimiser.zero_grad()
                 #calculate the training loss function for flow as -log_prob
                 unweighted_KL = self.network.log_prob(x_train, conditional=x_conditional)
-                if self.ranch_weights==True:
+                if self.randch_weights==True:
                     loss = -(unweighted_KL).mean()
                 else:
                     loss = -(xweights*unweighted_KL).mean()
@@ -141,7 +141,7 @@ class NFlow():
 
                 #calculate flow validation loss
                 unweighted_KL_loss = self.network.log_prob(x_val, conditional=x_conditional_val)
-                if self.ranch_weights==True:
+                if self.randch_weights==True:
                     val_loss = - (unweighted_KL_loss).mean()
                 else:
                     val_loss = - (x_weights_val*unweighted_KL_loss).mean()
@@ -154,6 +154,9 @@ class NFlow():
             sys.stdout.write(
                     '\r Epoch: {} || Training loss: {} || Validation loss: {}'.format(
                     n+1, train_loss, total_val_loss))
+            
+            if use_wandb:
+                wandb.log({"train_loss": train_loss, "val_loss": total_val_loss, "unweighted_train_KL": unweighted_KL_train, "unweighted_val_KL": total_unweighted_KL_val})
 
             #copy the best flow model 
             if total_val_loss < best_val_loss:
@@ -166,9 +169,6 @@ class NFlow():
         self.network.load_state_dict(best_model)
         torch.save(best_model, f'{filename}.pt')
         self.plot_history(filename)
-
-        if use_wandb:
-            wandb.log({"train_loss": train_loss, "val_loss": total_val_loss, "unweighted_train_KL": unweighted_KL_train, "unweighted_val_KL": total_unweighted_KL_val})
 
     def plot_history(self,filename):
         """

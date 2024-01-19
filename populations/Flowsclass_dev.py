@@ -552,8 +552,8 @@ class FlowModel(Model):
             },
             'no_trans': {
                 'distribution': 'int_uniform',
-                'min': 2,
-                'max': 8
+                'min': 4,
+                'max': 10
             },
             'no_neurons': {
                 'distribution': 'int_uniform',
