@@ -262,7 +262,6 @@ class NFlow():
                 random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)), p=weights)
             else:
                 random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
-            random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
             batched_hp_pairs = training_samples[random_samples, -1]
             batch_weights = training_samples[random_samples,-2]
 
