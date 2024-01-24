@@ -253,11 +253,10 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
     log_prior = lnp(x, submodels_dict, _concentration)
     if not np.isfinite(log_prior):
         return log_prior
-    print(log_prior)
 
     # Likelihood
     log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows)
-    print(log_like)
+    
 
     return log_like + log_prior #evidence is divided out
 
