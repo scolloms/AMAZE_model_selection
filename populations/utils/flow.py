@@ -321,8 +321,7 @@ class NFlow():
 
         jac[:,0] = mappings[1]/((sample[:,0])*(mappings[1]-(sample[:,0]))*mappings[0])
         jac[:,1] = mappings[3]/((sample[:,1])*(mappings[3]-(sample[:,1]))*mappings[2])
-        jac[:,2] = 1/(1-sample[:,2]**2)
-        jac[:,3] = mappings[5]/((sample[:,3])*(mappings[5]-(sample[:,3]))*mappings[4])
+        jac[:,2] = mappings[5]/((sample[:,2])*(mappings[5]-(sample[:,2]))*mappings[4])
         
         return torch.sum(torch.log(torch.abs(jac)), dim=1)
 

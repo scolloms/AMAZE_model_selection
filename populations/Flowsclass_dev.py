@@ -305,8 +305,7 @@ class FlowModel(Model):
             else:
                 models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
-            models_stack[:,2] = np.arctanh(models_stack[:,2])
-            models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
+            models_stack[:,2],max_logit_z, max_z = self.logistic(models_stack[:,2],wholedataset=True, \
                 rescale_max=self.param_bounds[3][1])
 
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
@@ -360,11 +359,8 @@ class FlowModel(Model):
             joined_chib_samples[:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,1], wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
 
-            #chieff - original range -1 to +1
-            joined_chib_samples[:,2] = np.arctanh(joined_chib_samples[:,2])
-
             #redshift - original range 0 to inf
-            joined_chib_samples[:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,3],wholedataset=True, \
+            joined_chib_samples[:,2], max_logit_z, max_z = self.logistic(joined_chib_samples[:,2],wholedataset=True, \
                 rescale_max=self.param_bounds[3][1])
 
             weights = np.reshape(weights,(-1,1))
@@ -392,8 +388,7 @@ class FlowModel(Model):
         samps = np.zeros(np.shape(logit_samps))
         samps[:,0] = self.expistic(logit_samps[:,0], self.mappings[0], self.mappings[1])
         samps[:,1] = self.expistic(logit_samps[:,1], self.mappings[2], self.mappings[3])
-        samps[:,2] = np.tanh(logit_samps[:,2])
-        samps[:,3] = self.expistic(logit_samps[:,3], self.mappings[4], self.mappings[5])
+        samps[:,2] = self.expistic(logit_samps[:,2], self.mappings[4], self.mappings[5])
         return samps
 
     def __call__(self, data, conditional_hp_idxs, prior_pdf=None, proc_idx=None, return_dict=None):
@@ -482,8 +477,7 @@ class FlowModel(Model):
 
         mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
         mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
-        mapped_data[:,:,2]= np.arctanh(data[:,:,2])
-        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], False, max=self.mappings[4], rescale_max=self.mappings[5])
+        mapped_data[:,:,2],_,_= self.logistic(data[:,:,2], False, max=self.mappings[4], rescale_max=self.mappings[5])
 
         return mapped_data
 
