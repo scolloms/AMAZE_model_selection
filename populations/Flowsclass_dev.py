@@ -306,7 +306,7 @@ class FlowModel(Model):
                 models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
             models_stack[:,2],max_logit_z, max_z = self.logistic(models_stack[:,2],wholedataset=True, \
-                rescale_max=self.param_bounds[3][1])
+                rescale_max=self.param_bounds[2][1])
 
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
@@ -361,7 +361,7 @@ class FlowModel(Model):
 
             #redshift - original range 0 to inf
             joined_chib_samples[:,2], max_logit_z, max_z = self.logistic(joined_chib_samples[:,2],wholedataset=True, \
-                rescale_max=self.param_bounds[3][1])
+                rescale_max=self.param_bounds[2][1])
 
             weights = np.reshape(weights,(-1,1))
             train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
