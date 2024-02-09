@@ -284,8 +284,8 @@ class FlowModel(Model):
             #put samples from binary parameters for all chi_bs into model_stack
             models = np.zeros((self.no_binaries, self.no_params))
             weights = np.zeros((self.no_binaries))
-            model_size = np.zeros(self.no_params)
-            cumulsize = np.zeros(self.no_params)
+            model_size = np.zeros(len(self.hps[0]))
+            cumulsize = np.zeros(len(self.hps[0]))
 
             #moves binary parameter samples and weights from dictionaries into arrays, reducing dimension in hyperparameter space
             for chib_id, xb in enumerate(self.hps[0]):
