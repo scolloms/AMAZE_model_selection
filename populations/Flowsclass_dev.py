@@ -298,15 +298,8 @@ class FlowModel(Model):
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
-            if channel_id == 2:
-                #add extra tiny amount to GC mass ratios as q=1 samples exist
-                models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
-                rescale_max=self.param_bounds[1][1]+0.001)
-            else:
-                models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
+            models_stack[:,1],max_logit_z, max_z = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
-            models_stack[:,2],max_logit_z, max_z = self.logistic(models_stack[:,2],wholedataset=True, \
-                rescale_max=self.param_bounds[2][1])
 
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
@@ -355,13 +348,9 @@ class FlowModel(Model):
             joined_chib_samples[:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,0], wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
 
-            #mass ratio - original range 0 to 1
-            joined_chib_samples[:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,1], wholedataset=True, \
-                rescale_max=self.param_bounds[1][1])
-
             #redshift - original range 0 to inf
-            joined_chib_samples[:,2], max_logit_z, max_z = self.logistic(joined_chib_samples[:,2],wholedataset=True, \
-                rescale_max=self.param_bounds[2][1])
+            joined_chib_samples[:,1], max_logit_z, max_z = self.logistic(joined_chib_samples[:,1],wholedataset=True, \
+                rescale_max=self.param_bounds[1][1])
 
             weights = np.reshape(weights,(-1,1))
             train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
@@ -372,7 +361,7 @@ class FlowModel(Model):
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
 
         #save mapping constants
-        mappings = np.asarray([max_logit_mchirp, max_mchirp, max_logit_q, max_q, max_logit_z, max_z])
+        mappings = np.asarray([max_logit_mchirp, max_mchirp, max_logit_z, max_z])
         np.save(f'{filepath}{self.channel_label}_mappings.npy',mappings)
         
         return(training_data, val_data, mappings)
@@ -388,7 +377,6 @@ class FlowModel(Model):
         samps = np.zeros(np.shape(logit_samps))
         samps[:,0] = self.expistic(logit_samps[:,0], self.mappings[0], self.mappings[1])
         samps[:,1] = self.expistic(logit_samps[:,1], self.mappings[2], self.mappings[3])
-        samps[:,2] = self.expistic(logit_samps[:,2], self.mappings[4], self.mappings[5])
         return samps
 
     def __call__(self, data, conditional_hp_idxs, prior_pdf=None, proc_idx=None, return_dict=None):
@@ -477,7 +465,6 @@ class FlowModel(Model):
 
         mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
         mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
-        mapped_data[:,:,2],_,_= self.logistic(data[:,:,2], False, max=self.mappings[4], rescale_max=self.mappings[5])
 
         return mapped_data
 
@@ -590,7 +577,7 @@ class FlowModel(Model):
         self.flow.load_model(f'{filepath}{channel}.pt')
         self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
         if self.channel_label == 'GC':
-            self.mappings[self.mappings==None] = 1.001
+            self.mappings[self.mappings==None] = 1.
         else:
             self.mappings[self.mappings==None] = 1.
 
