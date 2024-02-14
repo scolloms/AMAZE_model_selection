@@ -176,7 +176,7 @@ def lnp(x, submodels_dict, _concentration):
     return dirichlet.logpdf(betas_tmp, _concentration)
 
 
-def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows): #data here is obsdata previously, and x is the point in log hyperparam space
+def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, use_reg): #data here is obsdata previously, and x is the point in log hyperparam space
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
@@ -231,13 +231,14 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows):
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
             alpha += beta * smdl.alpha
- 
-        #LSE population probability plus uniform regularisation
-        smallest_n =990903
 
-        pi_reg = 1/(smallest_n+1)
-        q_weight = smallest_n/(smallest_n+1)
-        lnprob = logsumexp([q_weight + lnprob, pi_reg], axis=0)
+        if use_reg:
+            #LSE population probability plus uniform regularisation
+            smallest_n =990903
+
+            pi_reg = np.log(1/(smallest_n+1))
+            q_weight = np.log(smallest_n/(smallest_n+1))
+            lnprob = logsumexp([q_weight + lnprob, np.array([pi_reg])], axis=0)
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
     return (lnprob-np.log(alpha)).sum()
