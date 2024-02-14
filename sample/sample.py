@@ -176,7 +176,7 @@ def lnp(x, submodels_dict, _concentration):
     return dirichlet.logpdf(betas_tmp, _concentration)
 
 
-def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, use_reg): #data here is obsdata previously, and x is the point in log hyperparam space
+def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, use_reg=True): #data here is obsdata previously, and x is the point in log hyperparam space
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
