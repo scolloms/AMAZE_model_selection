@@ -1,20 +1,21 @@
 #! /bin/bash
-#testing wandb on local cpu, varying number of epochs between 10 and 30
+#testing wandb on local gpu, varying number of transforms, bins, and neurons
 
 
-model_path="/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5"
-gw_path="/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gw_events"
+model_path="/data/wiay/2297403c/models_reduced.hdf5"
+gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events"
 flow_path="./flowmodel/"
 
-python ../../model_select --file-path ${model_path} \
+/data/wiay/2297403c/conda_envs/amaze/bin/python ../../model_select --file-path ${model_path} \
         --model0 'gwobs' \
         --gw-path ${gw_path} \
         --flow-model-filename ${flow_path} \
 	--verbose \
-        --channels 'CE'\
-        --epochs 1500 \
-        --spline-bins 5\
+        --channels 'SMT' 'GC' 'CHE'\
+        --epochs 10000 10000 10000\
+        --spline-bins 4 4 4\
         --train-flows \
+        --device cuda:0 \
         --use-flows \
         --use-wandb \
         --sensitivity 'midhighlatelow_network' \
