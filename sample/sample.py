@@ -240,6 +240,9 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             print(np.array([pi_reg]))
             q_weight = np.log(smallest_n/(smallest_n+1))
             print(lnprob.shape)
+            print(q_weight + lnprob)
+            print(logsumexp([q_weight + lnprob, np.array([pi_reg])]))
+            print(logsumexp([q_weight + lnprob, np.array([pi_reg])], axis=0))
             lnprob = logsumexp([q_weight + lnprob, np.array([pi_reg])], axis=0)
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
