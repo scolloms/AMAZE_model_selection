@@ -25,6 +25,8 @@ _nwalkers = 16
 _nsteps = 10000
 _fburnin = 0.2
 
+_smallest_n = 9909
+
 """
 Class for initializing and running the sampler.
 """
@@ -234,10 +236,8 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
 
         if use_reg:
             #LSE population probability plus uniform regularisation
-            smallest_n =990903
-
-            pi_reg = np.log(1/(smallest_n+1))
-            q_weight = np.log(smallest_n/(smallest_n+1))
+            pi_reg = np.log(1/(_smallest_n+1))
+            q_weight = np.log(_smallest_n/(_smallest_n+1))
             lnprob = logsumexp([q_weight + lnprob, np.repeat(pi_reg, lnprob.shape[0])], axis=0)
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
