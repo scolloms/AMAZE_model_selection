@@ -195,22 +195,22 @@ class FlowModel(Model):
                 # detectable only used for plotting
                 if self.detectable == True:
                     if (cosmo_weights[key] is not None) and (pdets[key] is not None):
-                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key])) * (pdets[key] / np.sum(pdets[key]))
+                        combined_weights[key] = (cosmo_weights[key] / np.max(cosmo_weights[key])) * (pdets[key] / np.max(pdets[key]))
                     elif pdets[key] is not None:
-                        combined_weights[key] = (pdets[key] / np.sum(pdets[key]))
+                        combined_weights[key] = (pdets[key] / np.max(pdets[key]))
                     elif (cosmo_weights[key] is not None):
-                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
+                        combined_weights[key] = (cosmo_weights[key] / np.max(cosmo_weights[key]))
                     else:
                         combined_weights[key] = np.ones(len(sbml_samps))
                 else:
                     if (cosmo_weights[key] is not None):
-                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
+                        combined_weights[key] = (cosmo_weights[key] / np.max(cosmo_weights[key]))
                     else:
                         combined_weights[key] = np.ones(len(sbml_samps))
                 if use_unityweights == True:
                     pass
                 else:
-                    combined_weights[key] /= np.sum(combined_weights[key])
+                    combined_weights[key] /= np.max(combined_weights[key])
 
         #sets weights as class properties
         self.combined_weights = combined_weights
