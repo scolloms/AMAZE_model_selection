@@ -411,7 +411,7 @@ class FlowModel(Model):
         samps[:,3] = self.expistic(logit_samps[:,3], self.mappings[4], self.mappings[5])
         return samps
 
-    def __call__(self, data, conditional_hp_idxs, prior_pdf=None, proc_idx=None, return_dict=None):
+    def __call__(self, data, conditional_hps, prior_pdf=None, proc_idx=None, return_dict=None):
         """
         Calculate the likelihood of the observations give a particular hypermodel (given by conditional_hps).
         (this is the hyperlikelihood).
@@ -443,12 +443,7 @@ class FlowModel(Model):
         prior_pdf = prior_pdf if prior_pdf is not None else np.ones((data.shape[0],data.shape[1]))
         prior_pdf[prior_pdf==0] = 1e-50
 
-        conditional_hps = []
-
-        #gets values of hyperparameters at indices given by conditional_hp_idxs
-        #self.conditionals is number of hyperparameters, self.hps is list of hyperparameters [[chi_b],[alpha]]
-        for i in range(self.conditionals):
-            conditional_hps.append(self.hps[i][conditional_hp_idxs[i]])
+        #instead of conditional hp indxs here we need the actual values for continuous inference
         conditional_hps = np.asarray(conditional_hps)
 
         #maps observations into the logistically mapped space
@@ -614,6 +609,13 @@ class FlowModel(Model):
             self.mappings[self.mappings==None] = 1.001
         else:
             self.mappings[self.mappings==None] = 1.
+
+    def get_alpha(self, hyperparams):
+        alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
+        alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), alpha_grid,\
+                        bounds_error=False, fill_value=None, method='linear')
+        alpha = alpha_interp([hyperparams])
+        return alpha
 
 
     ######CURRENTLY don't worry about functions below here - theyre used for plotting or simulated events
