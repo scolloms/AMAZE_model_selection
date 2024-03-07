@@ -332,7 +332,7 @@ class FlowModel(Model):
             cumulsize = np.zeros(self.total_hps)
 
             #format which chi_bs and alphas match which parameter values being read in
-            chi_b_alpha_pairs= np.zeros((self.total_hps,2))
+            chi_b_alpha_pairs= np.zeros((20,2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
             if testCEsmdl:
