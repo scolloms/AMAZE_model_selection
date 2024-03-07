@@ -223,7 +223,7 @@ class FlowModel(Model):
         self.no_trans = 6
         self.no_neurons = 128
         batch_size=10000
-        total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
+        self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
         channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
         channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
@@ -238,11 +238,11 @@ class FlowModel(Model):
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins, randch_weights=randch_weights)
+                    self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins, randch_weights=randch_weights)
         self.flow = flow
 
 
-    def map_samples(self, samples, params, filepath):
+    def map_samples(self, samples, params, filepath, testCEsmdl=True):
         """
         Maps samples with logistic mapping (mchirp, q, z samples) and tanh (chieff).
         Stacks data by [mchirp,q,chieff,z,weight,chi_b,(alpha)].
@@ -319,21 +319,32 @@ class FlowModel(Model):
             #CE channel with alpha_CE parameter
 
             #put data from required parameters for all alphas and chi_bs into model_stack
+
+            if testCEsmdl:
+                self.no_binaries = self.no_binaries - 996688
+                test_model_id = [1,2]
+                self.total_hps = self.total_hps - 1
+
             models = np.zeros((self.no_binaries, self.no_params))
             weights = np.zeros((self.no_binaries,1))
 
             model_size = np.zeros((4,5))
-            cumulsize = np.zeros(20)
+            cumulsize = np.zeros(self.total_hps)
 
             #format which chi_bs and alphas match which parameter values being read in
-            chi_b_alpha_pairs= np.zeros((20,2))
+            chi_b_alpha_pairs= np.zeros((self.total_hps,2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
+            if testCEsmdl:
+                chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs[test_model_id])
 
             #stack data
             i=0
             for chib_id in range(4):
                 for alpha_id in range(5):
+                    if testCEsmdl:
+                        if [chib_id, alpha_id] == test_model_id:
+                            continue
                     weights_temp=np.asarray(self.combined_weights[(chib_id, alpha_id)])
                     weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
                     model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
@@ -344,7 +355,7 @@ class FlowModel(Model):
                     i+=1
 
             
-            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (np.reshape(model_size, 20)).astype(int), axis=0)
+            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (np.reshape(model_size, self.total_hps)).astype(int), axis=0)
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = models
