@@ -178,7 +178,7 @@ def lnp(x, submodels_dict, _concentration):
     return dirichlet.logpdf(betas_tmp, _concentration)
 
 
-def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, use_reg=True): #data here is obsdata previously, and x is the point in log hyperparam space
+def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, use_reg=True, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
@@ -209,6 +209,9 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
     # Detection effiency for this hypermodel
     alpha = 0
 
+    #regularisation term
+    smallest_n = kwargs['smallest_n'] if 'smallest_n' in kwargs.keys() else _smallest_n
+
     # Iterate over channels in this submodel, return likelihood of population model
     #can't vectorise over this unless its a numpy array of flows, which doesn't seem like the best coding practice
     for channel, beta in zip(channels, betas):
@@ -236,8 +239,8 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
 
         if use_reg:
             #LSE population probability plus uniform regularisation
-            pi_reg = np.log(1/(_smallest_n+1))
-            q_weight = np.log(_smallest_n/(_smallest_n+1))
+            pi_reg = np.log(1/(smallest_n+1))
+            q_weight = np.log(smallest_n/(smallest_n+1))
             lnprob = logsumexp([q_weight + lnprob, np.repeat(pi_reg, lnprob.shape[0])], axis=0)
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
