@@ -26,6 +26,7 @@ _nsteps = 10000
 _fburnin = 0.2
 
 _smallest_n = 9909
+_hyperparam_bounds = [[0.,0.5],[0.2,5.]]
 
 """
 Class for initializing and running the sampler.
@@ -101,6 +102,9 @@ posteriors!".format(self.posterior_name))
         self.nsteps = kwargs['nsteps'] if 'nsteps' in kwargs else _nsteps
         self.fburnin = kwargs['fburnin'] if 'fburnin' in kwargs else _fburnin
 
+
+        self.hyperparam_bounds = kwargs['hyperparam_bounds'] if 'hyperparam_bounds' in kwargs else _hyperparam_bounds
+
     #still input flow dictionary
     def sample(self, pop_models, obsdata, use_flows, prior_pdf, verbose=True):
         """
@@ -114,16 +118,15 @@ posteriors!".format(self.posterior_name))
         # first, for the population hyperparameters
         #selects points in uniform prior for hyperparams chi_b and alpha
         for idx in np.arange(self.Nhyper):
-            #TO CHANGE for continuous flows- initiate in values of chi_b and alpha range
-            p0[:,idx] = np.random.uniform(0, len(self.submodels_dict[idx]), size=self.nwalkers)
+            #changed for continuous flows- initiate in values of chi_b and alpha range given bounds of the hyperparameters
+            p0[:,idx] = np.random.uniform(self.hyperparam_bounds[idx][0], self.hyperparam_bounds[idx][1], size=self.nwalkers)
         # second, for the branching fractions (we have Nchannel-1 betasin the inference because of the implicit constraint that Sum(betas) = 1
         _concentration = np.ones(len(self.channels))
         beta_p0 =  dirichlet.rvs(_concentration, p0.shape[0])
         p0[:,self.Nhyper:] = beta_p0[:,:-1]
 
         # --- Do the sampling
-        #TO CHANGE for continuous flows - feed flows and prior range on chi_b and alpha for samplers
-        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, prior_pdf] #these are arguments to pass to self.posterior
+        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, prior_pdf, self.hyperparam_bounds] #these are arguments to pass to self.posterior
         if verbose:
             print("Sampling...")
         sampler = self.sampler(self.nwalkers, self.ndim, self.posterior, args=posterior_args) #calls emcee sampler with self.posterior as probability function
@@ -154,16 +157,19 @@ posteriors!".format(self.posterior_name))
 
 # --- Define the likelihood and prior
 
-def lnp(x, submodels_dict, _concentration):
+def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
     """
     Log of the prior. 
     Returns logL of -inf for points outside, uniform within. 
     Is conditional on the sum of the betas being one.
     """
-    # first get prior on the hyperparameters, flat between the model (dummy) indices
+    # first get prior on the hyperparameters, flat between the hyperparameter boundaries
     for hyper_idx in list(submodels_dict.keys()):
         hyperparam = x[hyper_idx]
-        if ((hyperparam < 0) | (hyperparam > len(submodels_dict[hyper_idx]))):
+        print(hyperparam)
+        print(hyperparam_bounds[hyper_idx][0])
+        print(hyperparam_bounds[hyper_idx][1])
+        if ((hyperparam < hyperparam_bounds[hyper_idx][0]) | (hyperparam > hyperparam_bounds[hyper_idx][1])):
             return -np.inf
 
     # second, get the prior on the betas as a Dirichlet prior
@@ -225,13 +231,14 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             smdl = pop_models[channel]
             #LSE over channels
             #keep lnprob as shape [Nobs]
-            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs, prior_pdf=prior_pdf)], axis=0)
+            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], prior_pdf=prior_pdf)], axis=0)
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
-                alpha += beta * smdl.alpha[tuple(hyperparam_idxs)]
+                alpha += beta * smdl.get_alpha([tuple(hyperparam_idxs)])
+                print(alpha)
             else:
-                alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
+                alpha += beta * smdl.get_alpha([tuple(hyperparam_idxs)[0],1.])
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
@@ -247,7 +254,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
     return (lnprob-np.log(alpha)).sum()
 
 
-def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows, prior_pdf):
+def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows, prior_pdf, hyperparam_bounds):
     """
     Combines the prior and likelihood to give a log posterior probability 
     at a given point
@@ -260,7 +267,8 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
         models of KDE probabilities
     """
     # Prior
-    log_prior = lnp(x, submodels_dict, _concentration)
+    log_prior = lnp(x, submodels_dict, _concentration, hyperparam_bounds)
+    print(log_prior)
     if not np.isfinite(log_prior):
         return log_prior
 
