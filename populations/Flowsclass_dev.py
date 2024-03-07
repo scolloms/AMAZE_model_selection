@@ -323,6 +323,7 @@ class FlowModel(Model):
             if testCEsmdl:
                 self.no_binaries = self.no_binaries - 996688
                 test_model_id = [1,2]
+                test_model_id_flat = 7
                 self.total_hps = self.total_hps - 1
 
             models = np.zeros((self.no_binaries, self.no_params))
@@ -332,11 +333,11 @@ class FlowModel(Model):
             cumulsize = np.zeros(self.total_hps)
 
             #format which chi_bs and alphas match which parameter values being read in
-            chi_b_alpha_pairs= np.zeros((20,2))
+            chi_b_alpha_pairs= np.zeros((20, 2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
             if testCEsmdl:
-                chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs[test_model_id])
+                chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs, test_model_id_flat, axis=0)
 
             #stack data
             i=0
