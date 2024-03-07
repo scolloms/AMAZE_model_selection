@@ -355,8 +355,11 @@ class FlowModel(Model):
                     weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
                     i+=1
 
-            
-            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (np.reshape(model_size, self.total_hps)).astype(int), axis=0)
+            flat_model_size = np.reshape(model_size, 20)
+            if testCEsmdl:
+                flat_model_size = np.delete(flat_model_size, test_model_id_flat)
+
+            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = models
