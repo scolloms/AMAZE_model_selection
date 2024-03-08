@@ -228,12 +228,13 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             smdl = pop_models[channel]
             #LSE over channels
             #keep lnprob as shape [Nobs]
-            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], prior_pdf=prior_pdf)], axis=0)
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
+                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([tuple(hyperparam_idxs)])
             else:
+                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)-1], prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([tuple(hyperparam_idxs)[0],1.])
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
