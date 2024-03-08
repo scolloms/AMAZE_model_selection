@@ -445,7 +445,6 @@ class FlowModel(Model):
 
         #instead of conditional hp indxs here we need the actual values for continuous inference
         conditional_hps = np.asarray(conditional_hps)
-        print(conditional_hps.shape)
 
         #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(data)
