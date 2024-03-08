@@ -355,6 +355,7 @@ class NFlow():
         hyperparams = torch.from_numpy(conditionals.astype(np.float32)).to(self.device)
         #store shape
         shape = mapped_sample.shape
+        print(shape)
 
         #flatten samples given they are have dimensions Nsamples x Nobs x Nparams
         sample = torch.flatten(sample, start_dim=0, end_dim=1)
@@ -363,6 +364,7 @@ class NFlow():
         hyperparams = hyperparams.reshape(-1,self.cond_inputs)
         sample = sample.reshape(-1,self.no_params)
         mapped_sample = mapped_sample.reshape(-1,self.no_params)
+        print(hyperparams.shape, mapped_sample.shape)
 
         #removed 'None' that was stand in for secondary q mapping
         #mappings=mappings[mappings != None]
