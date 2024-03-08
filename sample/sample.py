@@ -166,9 +166,6 @@ def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
     # first get prior on the hyperparameters, flat between the hyperparameter boundaries
     for hyper_idx in list(submodels_dict.keys()):
         hyperparam = x[hyper_idx]
-        print(hyperparam)
-        print(hyperparam_bounds[hyper_idx][0])
-        print(hyperparam_bounds[hyper_idx][1])
         if ((hyperparam < hyperparam_bounds[hyper_idx][0]) | (hyperparam > hyperparam_bounds[hyper_idx][1])):
             return -np.inf
 
@@ -236,7 +233,6 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
                 alpha += beta * smdl.get_alpha([tuple(hyperparam_idxs)])
-                print(alpha)
             else:
                 alpha += beta * smdl.get_alpha([tuple(hyperparam_idxs)[0],1.])
         else:
@@ -268,7 +264,6 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
     """
     # Prior
     log_prior = lnp(x, submodels_dict, _concentration, hyperparam_bounds)
-    print(log_prior)
     if not np.isfinite(log_prior):
         return log_prior
 

@@ -364,6 +364,7 @@ class NFlow():
         hyperparams = hyperparams.reshape(-1,self.cond_inputs)
         sample = sample.reshape(-1,self.no_params)
         mapped_sample = mapped_sample.reshape(-1,self.no_params)
+        print(self.cond_inputs, self.channel)
         print(hyperparams.shape, mapped_sample.shape)
 
         #removed 'None' that was stand in for secondary q mapping
