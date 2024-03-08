@@ -450,6 +450,7 @@ class FlowModel(Model):
         for i in range(self.conditionals):
             conditional_hps.append(self.hps[i][conditional_hp_idxs[i]])
         conditional_hps = np.asarray(conditional_hps)
+        print(self.channel, conditional_hps.shape)
 
         #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(data)
