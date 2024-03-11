@@ -380,3 +380,11 @@ class NFlow():
             log_prob[np.isnan(log_prob)] = -np.inf
 
         return log_prob
+
+    def get_latent_samps(self, samps, conditionals):
+        
+        samps = torch.from_numpy(samps.astype(np.float32))
+        conditionals = torch.from_numpy(conditionals.astype(np.float32))
+
+        latent_samples, _= self.network.forward(samps.reshape(-1,self.no_params), conditional=conditionals.reshape(-1,self.cond_inputs))
+        return latent_samples

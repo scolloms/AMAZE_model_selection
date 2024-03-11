@@ -470,6 +470,19 @@ class FlowModel(Model):
         
         return likelihood
 
+    def get_latent_samps(self, samps, conds):
+
+        conds = np.asarray(conds)
+
+        #maps observations into the logistically mapped space
+        mapped_obs = self.map_obs(samps)
+
+        #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
+        conds = np.repeat([conds],np.shape(mapped_obs)[1], axis=0)
+        conds = np.repeat([conds],np.shape(mapped_obs)[0], axis=0)
+
+        return self.flow.get_latent_samps(mapped_obs, conds)
+
     def map_obs(self,data):
         """
         Maps oberservational data into logistically mapped space for flows to handle.
