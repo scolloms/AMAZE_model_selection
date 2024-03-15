@@ -120,7 +120,7 @@ class FlowModel(Model):
         self.detectable = detectable
 
         #initialises list of population hyperparameter values
-        self.hps = [[0.,0.1,0.2,0.5]]
+        self.hps = [[0.]]
         self.param_bounds = [_param_bounds[param] for param in self.params]
 
         #additional alpha dimension for CE channel, else dummy dimension
@@ -132,7 +132,7 @@ class FlowModel(Model):
         #number of binary parameters
         self.no_params = np.shape(params)[0]
         #dimensionailty of non-branching ratio hyperparameters
-        self.conditionals = 2 if self.channel_label =='CE' else 1
+        self.conditionals = 1
 
         #initialise dictionaries of alpha, cosmo_weights, pdet, optimal_snrs, and combined_weights for each submodel
         alpha = dict.fromkeys(samples.keys())
@@ -233,7 +233,7 @@ class FlowModel(Model):
         if use_unityweights==True:
             channel_samples=[20e6,864124,896611,582961, 4e6]
         else:
-            channel_samples = [19912038,864124,896611,582961, 4e6]
+            channel_samples = [4977848,864124,896611,582961, 4e6]
         self.no_binaries = int(channel_samples[channel_id])
 
         #initislises network
@@ -329,11 +329,11 @@ class FlowModel(Model):
             models = np.zeros((self.no_binaries, self.no_params))
             weights = np.zeros((self.no_binaries,1))
 
-            model_size = np.zeros((4,5))
+            model_size = np.zeros((self.hps[0].shape,self.hps[1].shape))
             cumulsize = np.zeros(self.total_hps)
 
             #format which chi_bs and alphas match which parameter values being read in
-            chi_b_alpha_pairs= np.zeros((20, 2))
+            chi_b_alpha_pairs= np.zeros((self.total_hps, 2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
             if testCEsmdl:
@@ -341,7 +341,7 @@ class FlowModel(Model):
 
             #stack data
             i=0
-            for chib_id in range(4):
+            for chib_id in range(1):
                 for alpha_id in range(5):
                     if testCEsmdl:
                         if [chib_id, alpha_id] == test_model_id:
@@ -625,8 +625,10 @@ class FlowModel(Model):
 
     def get_alpha(self, hyperparams):
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
+
         alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), alpha_grid,\
                         bounds_error=False, fill_value=None, method='linear')
+
         alpha = alpha_interp([hyperparams])
         return alpha
 
