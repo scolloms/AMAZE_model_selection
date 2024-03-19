@@ -120,7 +120,7 @@ class FlowModel(Model):
         self.detectable = detectable
 
         #initialises list of population hyperparameter values
-        self.hps = [[0.]]
+        self.hps = [[1]] #this is now the chi_b model id in this branch, not physical value
         self.param_bounds = [_param_bounds[param] for param in self.params]
 
         #additional alpha dimension for CE channel, else dummy dimension
@@ -142,7 +142,7 @@ class FlowModel(Model):
         combined_weights= dict.fromkeys(samples.keys())
 
         #loop over submodels
-        for chib_id, chib in enumerate(self.hps[0]):
+        for chib, chib_id in enumerate(self.hps[0]):
             for alphaid, alphaCE in enumerate(self.hps[1]):
 
                 #grab samples for each submodel depending on how many hyperparameter dimensions there are (CE vs non-CE)
@@ -216,7 +216,7 @@ class FlowModel(Model):
         self.combined_weights = combined_weights
         self.pdets = pdets
         self.optimal_snrs = optimal_snrs
-        self.alpha = alpha
+        self.alpha = {(i):alpha[(1,i)] for i in range(np.shape(self.hps[1])[0])}
         self.cosmo_weights = cosmo_weights
         
         #flow network parameters
@@ -233,7 +233,7 @@ class FlowModel(Model):
         if use_unityweights==True:
             channel_samples=[20e6,864124,896611,582961, 4e6]
         else:
-            channel_samples = [4977848,864124,896611,582961, 4e6]
+            channel_samples = [4978059,864124,896611,582961, 4e6]
         self.no_binaries = int(channel_samples[channel_id])
 
         #initislises network
@@ -242,7 +242,7 @@ class FlowModel(Model):
         self.flow = flow
 
 
-    def map_samples(self, samples, params, filepath, testCEsmdl=True):
+    def map_samples(self, samples, params, filepath, testCEsmdl=False):
         """
         Maps samples with logistic mapping (mchirp, q, z samples) and tanh (chieff).
         Stacks data by [mchirp,q,chieff,z,weight,chi_b,(alpha)].
@@ -329,37 +329,29 @@ class FlowModel(Model):
             models = np.zeros((self.no_binaries, self.no_params))
             weights = np.zeros((self.no_binaries,1))
 
-            model_size = np.zeros((self.hps[0].shape,self.hps[1].shape))
+            model_size = np.zeros((np.shape(self.hps[0])[0],np.shape(self.hps[1])[0]))
             cumulsize = np.zeros(self.total_hps)
-
-            #format which chi_bs and alphas match which parameter values being read in
-            chi_b_alpha_pairs= np.zeros((self.total_hps, 2))
-            chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
-            chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
-            if testCEsmdl:
-                chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs, test_model_id_flat, axis=0)
 
             #stack data
             i=0
-            for chib_id in range(1):
+            for chib, chib_id in enumerate(self.hps[0]):
                 for alpha_id in range(5):
                     if testCEsmdl:
                         if [chib_id, alpha_id] == test_model_id:
                             continue
                     weights_temp=np.asarray(self.combined_weights[(chib_id, alpha_id)])
                     weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
-                    model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
+                    model_size[chib, alpha_id] = np.shape(weights_idxs)[0]
                     cumulsize[i] = np.sum(model_size)
 
                     models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
                     weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
                     i+=1
 
-            flat_model_size = np.reshape(model_size, 20)
+            flat_model_size = np.reshape(model_size, self.total_hps)
+
             if testCEsmdl:
                 flat_model_size = np.delete(flat_model_size, test_model_id_flat)
-
-            all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = models
@@ -383,8 +375,11 @@ class FlowModel(Model):
                 rescale_max=self.param_bounds[3][1])
 
             weights = np.reshape(weights,(-1,1))
+            training_hps_stack = np.repeat(np.array(self.hps[1]), (model_size[0]).astype(int), axis=0)
+            training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
+
             train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
-                    train_test_split(joined_chib_samples, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
+                    train_test_split(joined_chib_samples, weights, training_hps_stack, shuffle=True, train_size=0.8)
 
         #concatenate data and weights and hyperparams
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
@@ -625,11 +620,9 @@ class FlowModel(Model):
 
     def get_alpha(self, hyperparams):
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
+        alpha_interp = np.interp([hyperparams], (self.hps[1]), np.array(tuple(self.alpha.values())))
 
-        alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), alpha_grid,\
-                        bounds_error=False, fill_value=None, method='linear')
-
-        alpha = alpha_interp([hyperparams])
+        alpha = alpha_interp
         return alpha
 
 
