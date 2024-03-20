@@ -632,7 +632,7 @@ class FlowModel(Model):
 
     def get_alpha(self, hyperparams):
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
-        alpha_interp = sp.interpolate.LinearNDInterpolator((self.hps[0],self.hps[1]), alpha_grid, fill_value=None)
+        alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), alpha_grid, fill_value=None)
         alpha = alpha_interp([hyperparams])
         return alpha
 
