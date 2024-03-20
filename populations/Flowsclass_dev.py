@@ -411,7 +411,7 @@ class FlowModel(Model):
         samps[:,3] = self.expistic(logit_samps[:,3], self.mappings[4], self.mappings[5])
         return samps
 
-    def __call__(self, data, conditional_hps, prior_pdf=None, proc_idx=None, return_dict=None):
+    def __call__(self, data, conditional_hps, prior_pdf=None, proc_idx=None, return_dict=None, use_reg=True):
         """
         Calculate the likelihood of the observations give a particular hypermodel (given by conditional_hps).
         (this is the hyperlikelihood).
@@ -456,6 +456,13 @@ class FlowModel(Model):
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) - np.log(prior_pdf)
+
+        if use_reg:
+            #LSE population probability plus uniform regularisation
+            smallest_n=9909
+            pi_reg = np.log(1/(smallest_n+1))
+            q_weight = np.log(smallest_n/(smallest_n+1))
+            likelihoods_per_samp = logsumexp([q_weight + likelihoods_per_samp, pi_reg*np.ones(likelihoods_per_samp.shape)], axis=0)
 
         #checks for nans
         if np.any(np.isnan(likelihoods_per_samp)):
@@ -520,22 +527,22 @@ class FlowModel(Model):
 
         #rescales samples so that they lie between 0 to 1, according to the upper bound of the parameter space
         rescale_max = rescale_max
-        d = data/rescale_max
+        data_normed = data/rescale_max
         
         #sample must be within bounds for logistic function to return definite value
-        if np.logical_or(d <= 0, d >= 1).any():
+        if np.logical_or(data_normed <= 0, data_normed >= 1).any():
             raise Exception('Data out of bounds for logistic mapping')
 
         #takes the logistic of sample
-        d = logit(d)
+        logit_data = logit(data_normed)
 
         #scales the distribution in logistic space, so that the samples can have spread O(1), easier for flow to learn
         if wholedataset:
-            max = np.max(d)
+            max = np.max(logit_data)
         else:
             max = max
-        d /= max
-        return([d, max, rescale_max])
+        logit_data /= max
+        return([logit_data, max, rescale_max])
 
     def expistic(self, data, max, rescale_max=None):
         data*=max
@@ -625,8 +632,7 @@ class FlowModel(Model):
 
     def get_alpha(self, hyperparams):
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
-        alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), alpha_grid,\
-                        bounds_error=False, fill_value=None, method='linear')
+        alpha_interp = sp.interpolate.LinearNDInterpolator((self.hps[0],self.hps[1]), alpha_grid, fill_value=None)
         alpha = alpha_interp([hyperparams])
         return alpha
 
