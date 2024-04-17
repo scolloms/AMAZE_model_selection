@@ -234,7 +234,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
                 lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([x[:len(submodels_dict)]])
             else:
-                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], prior_pdf=prior_pdf)], axis=0)
+                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)][0], prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([x[:len(submodels_dict)][0], 1.])
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
