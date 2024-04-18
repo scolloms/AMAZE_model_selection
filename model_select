@@ -63,6 +63,7 @@ argp.add_argument("--device", type=str, default='cpu', help="Device to run model
 argp.add_argument("--use-wandb", action="store_true", help="Whether or not to use Weights and biases to run a sweep over optimising parameters of the normalising flows.")
 argp.add_argument("--use-unityweights", action="store_true", help="If true sets cosmoweights to 1 (flows) or 1/no_smdl_samples (kde) for all samples")
 argp.add_argument("--randch-weights", action="store_true", help="If true choses training and validation samples according to weights instead of a weighted KL")
+argp.add_argument("--regularisation_N", type=str, default=None, help="If not none, is used as N in the regularisation term during inference")
 
 
 
@@ -91,6 +92,14 @@ elif use_flows==False:
         print_both(print_file, 'Using KDEs for inference.')
 else:
     warnings.warn('Construction of the hyperlikelihood function not defined. Please specify the use_flows argument.')
+
+#sets up uniform regularisation constant N
+if args.regularisation_N == None:
+    use_reg=False
+    smallest_N = None
+else:
+    use_reg=True
+    smallest_N = int(args.regularisation_N)
 
 
 # see if we're using GW observations
@@ -353,7 +362,7 @@ else:
         if verbose:
             print_both(print_file, "  {0:s}".format(model))
         #freezing the sample evals means using the call function, this is where the prior on the posterior samples is set in
-        getFromDict(pop_models, model.split('/')).freeze(obsdata, data_pdf=p_theta, multiproc=args.multiproc)
+        getFromDict(pop_models, model.split('/')).freeze(obsdata, smallest_N, data_pdf=p_theta, multiproc=args.multiproc)
     if verbose:
         print_both(print_file, "Done freezing KDE evaluations of observations!\n")
 
@@ -388,7 +397,7 @@ while all_models_at_deepest==False:
 
 # --- Do the sampling!
 sampler = sample.Sampler(model_names)
-sampler.sample(pop_models, obsdata, use_flows, prior_pdf=p_theta, verbose=verbose)
+sampler.sample(pop_models, obsdata, use_flows, smallest_N, prior_pdf=p_theta, verbose=verbose)
 samples = sampler.samples
 lnprb = sampler.lnprb
 submodels_dict = sampler.submodels_dict

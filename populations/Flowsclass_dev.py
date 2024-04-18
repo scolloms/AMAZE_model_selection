@@ -411,7 +411,7 @@ class FlowModel(Model):
         samps[:,3] = self.expistic(logit_samps[:,3], self.mappings[4], self.mappings[5])
         return samps
 
-    def __call__(self, data, conditional_hps, prior_pdf=None, proc_idx=None, return_dict=None, use_reg=True):
+    def __call__(self, data, conditional_hps, smallest_N, prior_pdf=None, proc_idx=None, return_dict=None, use_reg=True):
         """
         Calculate the likelihood of the observations give a particular hypermodel (given by conditional_hps).
         (this is the hyperlikelihood).
@@ -457,11 +457,10 @@ class FlowModel(Model):
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) - np.log(prior_pdf)
 
-        if use_reg:
+        if smallest_N is not None:
             #LSE population probability plus uniform regularisation
-            smallest_n=9909
-            pi_reg = np.log(1/(smallest_n+1))
-            q_weight = np.log(smallest_n/(smallest_n+1))
+            pi_reg = np.log(1/(smallest_N+1))
+            q_weight = np.log(smallest_N/(smallest_N+1))
             likelihoods_per_samp = logsumexp([q_weight + likelihoods_per_samp, pi_reg*np.ones(likelihoods_per_samp.shape)], axis=0)
 
         #checks for nans
