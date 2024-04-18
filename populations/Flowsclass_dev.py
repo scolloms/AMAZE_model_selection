@@ -444,6 +444,7 @@ class FlowModel(Model):
         prior_pdf[prior_pdf==0] = 1e-50
 
         #instead of conditional hp indxs here we need the actual values for continuous inference
+        #TO DO: implement check here that this is always the right shape
         conditional_hps = np.asarray(conditional_hps)
 
         #maps observations into the logistically mapped space
