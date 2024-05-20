@@ -169,7 +169,7 @@ def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitiv
                         df = pd.read_hdf(file_path, key=smdl)
                         label = '/'.join(smdl_list)
                         mdl = KDEModel.from_samples(label, df, params, sensitivity=sensitivity, normalize=normalize, detectable=detectable,\
-                            use_unityweights=use_unityweights)
+                            use_unityweights=use_unityweights, **kwargs)
                         current_level[part] = mdl
                     else:
                         current_level[part] = {}

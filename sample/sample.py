@@ -235,7 +235,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             model_list_tmp.insert(0,channel) #list with channel, 2 hypermodels (chi_b, alpha)
 
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
-            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
+            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data, smallest_N))], axis=0)
             alpha += beta * smdl.alpha
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
