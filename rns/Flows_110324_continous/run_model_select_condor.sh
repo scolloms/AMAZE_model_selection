@@ -19,4 +19,5 @@ flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flow
         --sensitivity 'midhighlatelow_network' \
         --save-samples \
         --prior 'p_theta' \
-        --random-seed 8675309
+        --random-seed 8675309 \
+        --name 190324test \
