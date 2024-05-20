@@ -102,7 +102,7 @@ posteriors!".format(self.posterior_name))
         self.fburnin = kwargs['fburnin'] if 'fburnin' in kwargs else _fburnin
 
     #still input flow dictionary
-    def sample(self, pop_models, obsdata, use_flows, prior_pdf, verbose=True):
+    def sample(self, pop_models, obsdata, use_flows, smallest_N, prior_pdf, verbose=True):
         """
         Initialize and run the sampler
         """
@@ -123,7 +123,7 @@ posteriors!".format(self.posterior_name))
 
         # --- Do the sampling
         #TO CHANGE for continuous flows - feed flows and prior range on chi_b and alpha for samplers
-        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, prior_pdf] #these are arguments to pass to self.posterior
+        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, smallest_N, prior_pdf] #these are arguments to pass to self.posterior
         if verbose:
             print("Sampling...")
         sampler = self.sampler(self.nwalkers, self.ndim, self.posterior, args=posterior_args) #calls emcee sampler with self.posterior as probability function
@@ -178,7 +178,7 @@ def lnp(x, submodels_dict, _concentration):
     return dirichlet.logpdf(betas_tmp, _concentration)
 
 
-def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, use_reg=True, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
+def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
@@ -209,9 +209,6 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
     # Detection effiency for this hypermodel
     alpha = 0
 
-    #regularisation term
-    smallest_n = kwargs['smallest_n'] if 'smallest_n' in kwargs.keys() else _smallest_n
-
     # Iterate over channels in this submodel, return likelihood of population model
     #can't vectorise over this unless its a numpy array of flows, which doesn't seem like the best coding practice
     for channel, beta in zip(channels, betas):
@@ -225,7 +222,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             smdl = pop_models[channel]
             #LSE over channels
             #keep lnprob as shape [Nobs]
-            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs, prior_pdf=prior_pdf)], axis=0)
+            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, hyperparam_idxs, smallest_N, prior_pdf=prior_pdf)], axis=0)
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
@@ -234,20 +231,14 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
                 alpha += beta * smdl.alpha[tuple(hyperparam_idxs)[0]]
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
-            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data))], axis=0)
+            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data, smallest_N))], axis=0)
             alpha += beta * smdl.alpha
-
-        if use_reg:
-            #LSE population probability plus uniform regularisation
-            pi_reg = np.log(1/(smallest_n+1))
-            q_weight = np.log(smallest_n/(smallest_n+1))
-            lnprob = logsumexp([q_weight + lnprob, np.repeat(pi_reg, lnprob.shape[0])], axis=0)
 
     #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
     return (lnprob-np.log(alpha)).sum()
 
 
-def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows, prior_pdf):
+def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows, smallest_N, prior_pdf):
     """
     Combines the prior and likelihood to give a log posterior probability 
     at a given point
@@ -265,7 +256,7 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
         return log_prior
 
     # Likelihood
-    log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows)
+    log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N)
     
 
     return log_like + log_prior #evidence is divided out
