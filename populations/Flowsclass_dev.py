@@ -296,13 +296,15 @@ class FlowModel(Model):
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
             models_stack = np.copy(models)
 
-            #scatter
-            for idx, param in enumerate(models_stack.T):
-                values, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
-                if np.any(unique_counts>1):
-                    print('found non-unique')
-                    for value in values[unique_counts>1]:
-                        models_stack[param==value,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(param[param==value]))
+            #scatter - only for chieff rn
+            #for idx, param in enumerate(models_stack.T):
+            param = models_stack[:,2]
+            idx=2
+            values, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
+            if np.any(unique_counts>1):
+                print('found non-unique')
+                for value in values[unique_counts>1]:
+                    models_stack[param==value,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(param[param==value]))
 
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
