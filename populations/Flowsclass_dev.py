@@ -289,11 +289,19 @@ class FlowModel(Model):
 
             #moves binary parameter samples and weights from dictionaries into arrays, reducing dimension in hyperparameter space
             for chib_id, xb in enumerate(self.hps[0]):
+
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
                 models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
             models_stack = np.copy(models)
+
+
+            for idx, param in enumerate(models_stack.T):
+                value, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
+                if np.any(unique_counts>1):
+                    print('found non-unique')
+                    models_stack[~unique_idxs,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(models_stack[~unique_idxs,idx]))
 
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
@@ -360,6 +368,12 @@ class FlowModel(Model):
                 flat_model_size = np.delete(flat_model_size, test_model_id_flat)
 
             all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
+
+            for idx, param in enumerate(models.T):
+                value, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
+                if np.any(unique_counts>1):
+                    print('found non-unique')
+                    models[~unique_idxs,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(models[~unique_idxs,idx]))
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = models
