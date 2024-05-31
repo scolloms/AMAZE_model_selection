@@ -1,6 +1,6 @@
 #! /bin/bash
 #runs model select with cpu, with flows, and preset file paths, CE channel training
-#KDE construction with _kde_bandwidth=0.005 in __init__.py
+#includes /data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events/GW190521_074359.hdf5 but not GW190521
 
 model_path="/data/wiay/2297403c/models_reduced.hdf5"
 gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events"
@@ -15,5 +15,4 @@ gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events"
         --save-samples \
         --make-plots \
         --prior 'p_theta' \
-        --random-seed 72 \
-        --name 'seed72'
+        --random-seed 8675309 \
