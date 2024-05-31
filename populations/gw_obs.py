@@ -66,9 +66,11 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
         gw_files = [gw+'.hdf5' for gw in gw_names]
     else:
         gw_files = []
+        events_to_exclude = np.array(['GW190521.hdf5'])
         for f in os.listdir(gwpath):
             if 'prior' not in f:
-                gw_files.append(f)
+                if any(gwname not in f for gwname in events_to_exclude):
+                    gw_files.append(f)
         gw_names = [gw.split('.')[0] for gw in gw_files]
 
     # Check to see if the files are in the obspath, else raise error
