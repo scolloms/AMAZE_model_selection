@@ -66,7 +66,7 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
         gw_files = [gw+'.hdf5' for gw in gw_names]
     else:
         gw_files = []
-        events_to_exclude = np.array(['GW190521'])
+        events_to_exclude = np.array(['GW190521.hdf5'])
         for f in os.listdir(gwpath):
             if 'prior' not in f:
                 if any(gwname not in f for gwname in events_to_exclude):
