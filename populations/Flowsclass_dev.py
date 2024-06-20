@@ -296,15 +296,10 @@ class FlowModel(Model):
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
             models_stack = np.copy(models)
 
-            #scatter - only for chieff rn
-            #for idx, param in enumerate(models_stack.T):
-            """param = models_stack[:,2]
-            idx=2
-            values, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
-            if np.any(unique_counts>1):
-                print('found non-unique')
-                for value in values[unique_counts>1]:
-                    models_stack[param==value,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(param[param==value]))"""
+            #scatter
+            for idx, param in enumerate(models_stack.T):
+                if len(np.unique(param))==1:
+                    models_stack[:,idx] += np.random.normal(loc=0.0, scale=1e-5, size=models_stack.shape[0])
 
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
@@ -372,11 +367,9 @@ class FlowModel(Model):
 
             all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
 
-            """for idx, param in enumerate(models.T):
-                value, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
-                if np.any(unique_counts>1):
-                    print('found non-unique')
-                    models[~unique_idxs,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(models[~unique_idxs,idx]))"""
+            for idx, param in enumerate(models.T):
+                if len(np.unique(param))==1:
+                    models[:,idx] += np.random.normal(loc=0.0, scale=1e-5, size=models.shape[0])
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = models

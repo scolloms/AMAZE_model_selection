@@ -171,13 +171,9 @@ class KDEModel(Model):
 
         # add a little bit of scatter to samples that have the exact same values, as this will freak out the KDE generator
         #for idx, param in enumerate(samples.T):
-        param = samples[:,2]
-        idx=2
-        values, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
-        if np.any(unique_counts>1):
-            print('found non-unique')
-            for value in values[unique_counts>1]:
-                samples[param==value,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(param[param==value]))
+        for idx, param in enumerate(samples.T):
+            if len(np.unique(param))==1:
+                samples[:,idx] += np.random.normal(loc=0.0, scale=1e-5, size=samples.shape[0])
 
         # Get the KDE objects, specify function for pdf
         # This custom KDE handles multiple dimensions, bounds, and weights, and takes in samples (Ndim x Nsamps)
