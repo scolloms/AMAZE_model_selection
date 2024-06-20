@@ -298,13 +298,13 @@ class FlowModel(Model):
 
             #scatter - only for chieff rn
             #for idx, param in enumerate(models_stack.T):
-            param = models_stack[:,2]
+            """param = models_stack[:,2]
             idx=2
             values, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
             if np.any(unique_counts>1):
                 print('found non-unique')
                 for value in values[unique_counts>1]:
-                    models_stack[param==value,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(param[param==value]))
+                    models_stack[param==value,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(param[param==value]))"""
 
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
@@ -372,11 +372,11 @@ class FlowModel(Model):
 
             all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
 
-            for idx, param in enumerate(models.T):
+            """for idx, param in enumerate(models.T):
                 value, unique_idxs, unique_counts = np.unique(param, return_index=True, return_counts=True)
                 if np.any(unique_counts>1):
                     print('found non-unique')
-                    models[~unique_idxs,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(models[~unique_idxs,idx]))
+                    models[~unique_idxs,idx] += np.random.normal(loc=0.0, scale=1e-5, size=np.shape(models[~unique_idxs,idx]))"""
 
             #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
             joined_chib_samples = models
@@ -554,11 +554,11 @@ class FlowModel(Model):
         return([d, max, rescale_max])
 
     def expistic(self, data, max, rescale_max=None):
-        data*=max
-        data = expit(data)
+        unmaxxed_data=data*max
+        expit_data = expit(unmaxxed_data)
         if rescale_max != None:
-            data *=rescale_max
-        return(data)
+            rescaled_data =expit_data*rescale_max
+        return(rescaled_data)
 
     def wandb_init(self, epochs):
         """
