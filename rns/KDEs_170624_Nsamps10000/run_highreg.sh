@@ -15,6 +15,7 @@ gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/gw_events"
         --save-samples \
         --make-plots \
         --prior 'p_theta' \
-        --random-seed 8675309 \
-        --regularisation_N '990903' \
-        --name 'smallestN990903'
+        --regularisation_N '9909' \
+        --random-seed 86 \
+        --Nsamps 10000 \
+        --name 'highreg'

@@ -80,7 +80,7 @@ verbose=args.verbose
 make_plots=args.make_plots
 use_flows=args.use_flows
 use_wandb=args.use_wandb
-print_file = open("output.txt", "a")
+print_file = open(f"output_{args.name}.txt", "a")
 
 # check that use flows is True or False
 if use_flows==True:
@@ -275,6 +275,11 @@ if gwobs:
     model0=None
     observations, obsdata, p_theta, events = gw_obs.generate_observations(params, args.gw_path, \
                                             args.Nsamps, args.uncertainty, args.prior)
+    # --- Set random seed
+    """if args.random_seed:
+        np.random.seed(args.random_seed)
+    else:
+        np.random.seed()"""
     if verbose:
         print_both(print_file, "Using the following {0:d} GW observations for inference:".format(len(events)))
         print_both(print_file, *events)
