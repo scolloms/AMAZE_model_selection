@@ -156,6 +156,17 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
             samples[idx, :, :] = df[params].iloc[sample_idxs]
             if prior is not None:
                 p_theta[idx, :] = df[prior].iloc[sample_idxs]
+
+                #redraw samples until all prior samples are not 0
+                while np.any(p_theta[idx, :]==0.):
+                    p_theta_zero_idx = np.where([p_theta[idx, :]==0.])[1]
+                    print(p_theta_zero_idx)
+                    replacement_sample_idxs = np.random.choice(np.arange(len(df)), size=p_theta_zero_idx.shape, replace=False)
+
+                    samples[:, p_theta_zero_idx, :] = df[params].iloc[replacement_sample_idxs]
+                    p_theta[:,p_theta_zero_idx] = df[prior].iloc[replacement_sample_idxs]
+
+
         if mesaurement_uncertainty == 'test':
             sample_idxs = [9,81,457]
             samples[idx, :, :] = df[params].iloc[sample_idxs]
