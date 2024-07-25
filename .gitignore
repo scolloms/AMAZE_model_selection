@@ -14,3 +14,4 @@
 *.pdf
 *.csv
 wandb/
+*.zip
