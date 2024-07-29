@@ -19,9 +19,10 @@ scheme of GWTC-1.
 """
 
 # can specify only a subset of GW events to use by uncommenting the line below
-_events_to_use = pd.read_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gwtc3_events/events_processed/events_processed/gwnames.csv',\
-     dtype=str)
-_events_to_use = np.reshape(np.array(_events_to_use),-1).tolist()
+_events_to_use=None
+#_events_to_use = pd.read_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gwtc3_events/events_processed/events_processed/gwnames.csv',\
+#     dtype=str)
+#_events_to_use = np.reshape(np.array(_events_to_use),-1).tolist()
 #_events_to_use = ["GW150914", "GW151226", "GW170608", "GW190519_153544", "GW190412"]#,"GW151012","GW151226","GW170104","GW170608","GW170729","GW170809","GW170814","GW170818","GW170823"]
 
 # specify the hdf5 key for the approximant being used
