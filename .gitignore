@@ -14,4 +14,6 @@
 *.pdf
 *.csv
 wandb/
+*.h5
 *.zip
+*.prior

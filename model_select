@@ -215,7 +215,7 @@ if not gwobs and not args.Nobs:
 
 # check that valid measurement uncertainty is specified
 if gwobs:
-    valid_uncertainties = ["delta", "gaussian", "posteriors"]
+    valid_uncertainties = ["delta", "gaussian", "posteriors", "test"]
     if args.uncertainty not in valid_uncertainties:
         raise ValueError("Unspecified measurement uncertainty procedure when using GW observations: '{0:s}' (valid uncertainties: {1:s})".format(args.uncertainty, ', '.join(valid_uncertainties)))
 else:
