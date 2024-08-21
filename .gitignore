@@ -16,3 +16,4 @@
 wandb/
 *.zip
 *.h5
+*.prior
