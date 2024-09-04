@@ -401,7 +401,7 @@ class FlowModel(Model):
         """
         Samples Flow
         """
-        logit_samps = self.flow.sample(N,conditional)
+        logit_samps = self.flow.sample(conditional,N)
 
         #map samples back from logit space
         samps = np.zeros(np.shape(logit_samps))
