@@ -221,7 +221,7 @@ class FlowModel(Model):
         
         #flow network parameters
         self.no_trans = 6
-        self.no_neurons = 128
+        self.no_neurons = 164
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
@@ -335,7 +335,7 @@ class FlowModel(Model):
             #format which chi_bs and alphas match which parameter values being read in
             chi_b_alpha_pairs= np.zeros((20, 2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
-            chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
+            chi_b_alpha_pairs[:,1] = np.tile(np.log(self.hps[1]), np.shape(self.hps[0])[0])
             if testCEsmdl:
                 chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs, test_model_id_flat, axis=0)
 
@@ -634,9 +634,9 @@ class FlowModel(Model):
     def get_alpha(self, hyperparams):
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
         if self.channel_label == "CE":
-            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
+            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
-            alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
+            alpha = np.exp(alpha_interp([hyperparams[0], hyperparams[1]]))
         else:
             alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
             bounds_error=False, method='pchip', fill_value=None)
