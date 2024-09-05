@@ -634,7 +634,7 @@ class FlowModel(Model):
     def get_alpha(self, hyperparams):
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
         if self.channel_label == "CE":
-            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), np.log(alpha_grid),\
+            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
             alpha = np.exp(alpha_interp([hyperparams[0], hyperparams[1]]))
         else:

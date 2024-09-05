@@ -3,7 +3,7 @@
 #running inference with fixed regularisation added per event sample, using extra-long trained flows
 
 model_path="/data/wiay/2297403c/models_reduced.hdf5"
-gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/simulated_events_processed/2_chi02_50events"
+gw_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/simulated_events_processed/2_chi02"
 flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flows_040924_trainlogalpha/flow_models/"
 
 /data/wiay/2297403c/conda_envs/amaze/bin/python ../../model_select --file-path ${model_path} \
@@ -22,4 +22,4 @@ flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flow
         --regularisation_N '990903' \
         --Nsamps 1000 \
         --random-seed 12 \
-        --name 50events_logalphaCE
+        --name 250events_logalphaCE
