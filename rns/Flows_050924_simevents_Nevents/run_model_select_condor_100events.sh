@@ -22,4 +22,4 @@ flow_path="/data/wiay/2297403c/amaze_model_select/AMAZE_model_selection/rns/Flow
         --regularisation_N '990903' \
         --Nsamps 1000 \
         --random-seed 12 \
-        --name 50events
+        --name 100events_normal
