@@ -87,7 +87,7 @@ class FlowModel(Model):
             use_unityweights=use_unityweights, randch_weights=randch_weights)
 
 
-    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False, no_neurons=164):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -221,7 +221,7 @@ class FlowModel(Model):
         
         #flow network parameters
         self.no_trans = 6
-        self.no_neurons = 164
+        self.no_neurons = no_neurons
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
