@@ -1,0 +1,21 @@
+universe = vanilla
+log = outdir/log_$(runname).txt
+error = outdir/err_$(runname).txt
+output = outdir/out_$(runname).txt
+
+# Fill in with your own script, arguments and input files
+# Note that you don't need to transfer any software
+executable = run_model_select_condor$(runfile)
+#arguments =
+#transfer_input_files =
+
+# Resource requirements
+request_cpus = 1
+request_memory = 16GB
+request_disk = 4GB
+
+#request_gpus = 1
+#require_gpus = (GlobalMemoryMb - (MemoryUsage?:0) > 10000 )
+
+# Number of jobs
+queue runfile, runname from runfiles.txt 
