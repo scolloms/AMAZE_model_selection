@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import scipy as sp
 from scipy.stats import dirichlet
+from scipy.stats import loguniform
 import pandas as pd
 from functools import reduce
 import operator
@@ -115,10 +116,9 @@ posteriors!".format(self.posterior_name))
         p0 = np.empty(shape=(self.nwalkers, self.ndim))
 
         # first, for the population hyperparameters
-        #selects points in uniform prior for hyperparams chi_b and alpha
-        for idx in np.arange(self.Nhyper):
-            #changed for continuous flows- initiate in values of chi_b and alpha range given bounds of the hyperparameters
-            p0[:,idx] = np.random.uniform(self.hyperparam_bounds[idx][0], self.hyperparam_bounds[idx][1], size=self.nwalkers)
+        #selects points in uniform prior for hyperparams chi_b, and loguniform in alpha
+        p0[:,0] = np.random.uniform(self.hyperparam_bounds[0][0], self.hyperparam_bounds[0][1], size=self.nwalkers)
+        p0[:,1] = loguniform.rvs(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
         # second, for the branching fractions (we have Nchannel-1 betasin the inference because of the implicit constraint that Sum(betas) = 1
         _concentration = np.ones(len(self.channels))
         beta_p0 =  dirichlet.rvs(_concentration, p0.shape[0])
@@ -176,8 +176,8 @@ def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
     if np.sum(betas_tmp) != 1.0:
         return -np.inf
 
-    # Dirchlet distribution prior for betas
-    return dirichlet.logpdf(betas_tmp, _concentration)
+    # Dirchlet distribution prior for betas, plus uniform prior on log(alphaCE)
+    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(x[1],a=self.hyperparam_bounds[1][0], b=self.hyperparam_bounds[1][1])
 
 
 def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
