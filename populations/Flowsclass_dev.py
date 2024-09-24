@@ -10,6 +10,7 @@ import warnings
 import pdb
 import time
 import wandb
+import json
 
 import numpy as np
 import scipy as sp
@@ -87,7 +88,8 @@ class FlowModel(Model):
             use_unityweights=use_unityweights, randch_weights=randch_weights)
 
 
-    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False, no_neurons=164):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu',\
+         no_bins=4, use_unityweights=False, randch_weights=False, no_neurons=164):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -623,7 +625,22 @@ class FlowModel(Model):
         save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
-    def load_model(self, filepath, channel):
+    def load_model(self, filepath, channel, device='cuda:0'):
+
+        #load no. neurons and no. bins from config and reinitialise flow if config for flows exists
+        if os.path.isfile(f'{filepath}flowconfig.json'):
+            with open(f'{filepath}flowconfig.json', 'r') as f:
+                config = json.load(f)
+            self.no_neurons = config[self.channel_label]['neurons']
+            no_bins = config[self.channel_label]['bins']
+            batch_size=10000
+
+            print(self.channel_label, self.no_neurons)
+
+            self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
+                self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+        
+        #load in actual flow model, and mappings
         self.flow.load_model(f'{filepath}{channel}.pt')
         self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
         if self.channel_label == 'GC':
