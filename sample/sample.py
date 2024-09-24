@@ -177,7 +177,7 @@ def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
         return -np.inf
 
     # Dirchlet distribution prior for betas, plus uniform prior on log(alphaCE)
-    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(x[1],a=self.hyperparam_bounds[1][0], b=self.hyperparam_bounds[1][1])
+    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(x[1],a=hyperparam_bounds[1][0], b=hyperparam_bounds[1][1])
 
 
 def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
