@@ -221,7 +221,7 @@ class FlowModel(Model):
         
         #flow network parameters
         self.no_trans = 6
-        self.no_neurons = 164
+        self.no_neurons = 128
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
