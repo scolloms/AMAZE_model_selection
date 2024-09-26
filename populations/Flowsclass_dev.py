@@ -125,7 +125,7 @@ class FlowModel(Model):
 
         #additional alpha dimension for CE channel, else dummy dimension
         if self.channel_label=='CE':
-            self.hps.append([0.2,0.5,1.,2.,5.])
+            self.hps.append(list(np.log([0.2,0.5,1.,2.,5.])))
         else:
             self.hps.append([1])
         
