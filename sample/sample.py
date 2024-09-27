@@ -26,7 +26,7 @@ _nwalkers = 16
 _nsteps = 10000
 _fburnin = 0.2
 
-_hyperparam_bounds = [[0.,0.5],[0.2,5.]]
+_hyperparam_bounds = [[0.,0.5]]
 
 """
 Class for initializing and running the sampler.
@@ -118,7 +118,6 @@ posteriors!".format(self.posterior_name))
         # first, for the population hyperparameters
         #selects points in uniform prior for hyperparams chi_b, and loguniform in alpha
         p0[:,0] = np.random.uniform(self.hyperparam_bounds[0][0], self.hyperparam_bounds[0][1], size=self.nwalkers)
-        p0[:,1] = loguniform.rvs(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
         # second, for the branching fractions (we have Nchannel-1 betasin the inference because of the implicit constraint that Sum(betas) = 1
         _concentration = np.ones(len(self.channels))
         beta_p0 =  dirichlet.rvs(_concentration, p0.shape[0])
@@ -177,7 +176,7 @@ def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
         return -np.inf
 
     # Dirchlet distribution prior for betas, plus uniform prior on log(alphaCE)
-    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(x[1],a=hyperparam_bounds[1][0], b=hyperparam_bounds[1][1])
+    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(1.,a=0.2, b=5.)
 
 
 def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
@@ -218,8 +217,8 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             #this could be done without some janky if statement but would need some rewiring of alpha
             #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
             if channel == 'CE':
-                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, [x[0], np.log(x[1])], smallest_N, prior_pdf=prior_pdf)], axis=0)
-                alpha += beta * smdl.get_alpha([x[0], np.log(x[1])])
+                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, [x[0], np.log(1.0)], smallest_N, prior_pdf=prior_pdf)], axis=0)
+                alpha += beta * smdl.get_alpha([x[0], np.log(1.0)])
             else:
                 lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)][0], smallest_N, prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([x[:len(submodels_dict)][0], 1.])
