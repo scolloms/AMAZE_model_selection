@@ -10,6 +10,7 @@ import warnings
 import pdb
 import time
 import wandb
+import json
 
 import numpy as np
 import scipy as sp
@@ -221,7 +222,7 @@ class FlowModel(Model):
         
         #flow network parameters
         self.no_trans = 6
-        self.no_neurons = 128
+        self.no_neurons = 164
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
@@ -623,7 +624,19 @@ class FlowModel(Model):
         save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
-    def load_model(self, filepath, channel):
+    def load_model(self, filepath, channel, device='cpu'):
+        if os.path.isfile(f'{filepath}flowconfig.json'):
+            with open(f'{filepath}flowconfig.json', 'r') as f:
+                config = json.load(f)
+            self.no_neurons = config[self.channel_label]['neurons']
+            no_bins = config[self.channel_label]['bins']
+            batch_size=10000
+
+            print(self.channel_label, self.no_neurons)
+
+            self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
+                self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+
         self.flow.load_model(f'{filepath}{channel}.pt')
         self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
         if self.channel_label == 'GC':
