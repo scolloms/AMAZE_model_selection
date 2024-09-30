@@ -1,0 +1,1 @@
+CE flow from trainlogalpha flows, and other flows from scatter trained flows.
