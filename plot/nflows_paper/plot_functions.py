@@ -10,6 +10,7 @@ import seaborn as sns
 from copy import deepcopy
 import corner
 import matplotlib.lines as mlines
+from scipy.stats import dirichlet
 
 from matplotlib import gridspec
 
@@ -24,6 +25,8 @@ _basepath, _ = os.path.split(os.path.realpath(__file__))
 plt.style.use(_basepath+"/mpl.sty")
 
 _params = ['mchirp','q', 'chieff', 'z']
+_channels = ['CE','CHE','GC','NSC','SMT']
+
 _param_label = ['Chirp Mass /$M_{\odot}$','Mass Ratio', 'Effective Spin', 'Redshift']
 _param_bounds = {"mchirp": (0,70), "q": (0.25,1), "chieff": (-0.5,1), "z": (0,1.25)}
 _param_ticks = {"mchirp": [0,10,20,30,40,50,60,70], "q": [0.25,0.5,0.75,1], "chieff": [-0.5,0,0.5,1], "z": [0,0.25,0.5,0.75,1.0,1.25]}
@@ -41,7 +44,13 @@ _Nsamps = 100000
 
 _models_path ='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
 
+pt = 1./72.27 # Hundreds of years of history... 72.27 points to an inch.
 
+jour_sizes = {"AAS": {"onecol": 246.*pt, "twocol": 513.*pt},
+              # Add more journals below. Can add more properties to each journal
+             }
+
+figure_width = jour_sizes["AAS"]["twocol"]
 
 
 _base_corner_kwargs = dict(
@@ -83,7 +92,10 @@ def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=
     #sample flow
 
     print('sampling flow...')
-    flow_samples_stack = weighted_flow.flow.sample(np.array([conditional[0], np.log(conditional[1])]),_Nsamps)
+    if channel_label=='CE':
+        flow_samples_stack = weighted_flow.flow.sample(np.array([conditional[0], np.log(conditional[1])]),_Nsamps)
+    else:
+        flow_samples_stack = weighted_flow.flow.sample(np.array([conditional[0]]),_Nsamps)
     flow_samples_stack[:,0] = weighted_flow.expistic(flow_samples_stack[:,0], weighted_flow.mappings[0], weighted_flow.mappings[1])
     flow_samples_stack[:,1] = weighted_flow.expistic(flow_samples_stack[:,1], weighted_flow.mappings[2])
     flow_samples_stack[:,2] = np.tanh(flow_samples_stack[:,2])
@@ -93,12 +105,14 @@ def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=
     if type(KDE_hyperparam_idxs) == type(None):
         pass
     else:
-        kde_samples = KDE_models[channel_label][submodels_dict[0][KDE_hyperparam_idxs[0]]][submodels_dict[1][KDE_hyperparam_idxs[1]]].sample(_Nsamps)
-
-
+        if channel_label=='CE':
+            kde_samples = KDE_models[channel_label][submodels_dict[0][KDE_hyperparam_idxs[0]]][submodels_dict[1][KDE_hyperparam_idxs[1]]].sample(_Nsamps)
+        else:
+            kde_samples = KDE_models[channel_label][submodels_dict[0][KDE_hyperparam_idxs[0]]].sample(_Nsamps)
+        np.save(f"{_basepath}/data/{channel_label}_KDEs_cornersample.npy", kde_samples)
+        
     print('saving samples...')
     np.save(f"{_basepath}/data/{channel_label}_flows_cornersample.npy", flow_samples_stack.numpy())
-    np.save(f"{_basepath}/data/{channel_label}_KDEs_cornersample.npy", kde_samples)
     print('samples saved')
 
 
@@ -106,7 +120,10 @@ def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None
 
     if justplot==False:
         sample_pop_corner( flow_dir, channel_label, conditional, KDE_hyperparam_idxs=hyperparam_idxs)
-    kde_samples = np.load(f"{_basepath}/data/{channel_label}_KDEs_cornersample.npy")
+    if type(hyperparam_idxs) == type(None):
+        pass
+    else:
+        kde_samples = np.load(f"{_basepath}/data/{channel_label}_KDEs_cornersample.npy")
     flow_samples= np.load(f"{_basepath}/data/{channel_label}_flows_cornersample.npy")
 
     popsynth_outputs = read_hdf5(_models_path, channel_label) # read all data from hdf5 file
@@ -130,9 +147,16 @@ def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None
     corner_kwargs_flow["color"] = colors[2]
     corner_kwargs_flow["hist_kwargs"]["color"] = colors[2]
 
-    fig =corner.corner(models_dict[tuple(hyperparam_idxs)],  weights=weights_dict[tuple(hyperparam_idxs)], **model_kwargs)
-    corner.corner(kde_samples, fig=fig, **corner_kwargs_kde)
-    corner.corner(flow_samples, fig=fig, **corner_kwargs_flow)
+    plt.rcParams['figure.figsize'] = [figure_width, figure_width]
+    if type(hyperparam_idxs) == type(None):
+        fig=corner.corner(flow_samples, **corner_kwargs_flow)
+    else:
+        if channel_label == 'CE':
+            fig =corner.corner(models_dict[tuple(hyperparam_idxs)],  weights=weights_dict[tuple(hyperparam_idxs)], **model_kwargs)
+        else:
+            fig =corner.corner(models_dict[hyperparam_idxs[0]],  weights=weights_dict[hyperparam_idxs[0]], **model_kwargs)
+        corner.corner(kde_samples, fig=fig, **corner_kwargs_kde)
+        corner.corner(flow_samples, fig=fig, **corner_kwargs_flow)
     plt.legend(
             handles=[
                 mlines.Line2D([], [], color=colors[i], label=labels[i])
@@ -141,4 +165,101 @@ def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None
             frameon=False,
             bbox_to_anchor=(1, 4), loc="upper right"
         )
-    plt.savefig(f"{_basepath}/pdfs/{channel_label}_flowKDEmodel_corner.pdf")
+    plt.savefig(f"{_basepath}/pdfs/{channel_label}_flowKDEmodel_corner_chib{hyperparam_idxs[0]}.pdf")
+
+def make_1D_result_discrete(filenames, second_files=None, labels = [None,None], figure_name='Discrete'):
+    channels = _channels
+    submodels_dict= {0: {0: 'chi00', 1: 'chi01', 2: 'chi02', 3: 'chi05'}, \
+    1: {0: 'alpha02', 1: 'alpha05', 2: 'alpha10', 3: 'alpha20', 4: 'alpha50'}}
+    channel_label =[r'$\beta_{\mathrm{CE}}$',r'$\beta_{\mathrm{CHE}}$',r'$\beta_{\mathrm{GC}}$',r'$\beta_{\mathrm{NSC}}$',r'$\beta_{\mathrm{SMT}}$']
+
+    Nhyper =2
+    _concentration = np.ones(len(channels))
+    beta_p0 =  dirichlet.rvs(_concentration, size=100000)
+
+    samples_allchains = np.array([])
+    samples_allchains_comp = np.array([])
+    fig, ax_margs = plt.subplots(2,5)
+    fig.tight_layout(h_pad=3)
+
+    #loop over astrophysical parameters
+    for hyper_idx in [0, 1]:
+
+        #add together samples from multiple files
+        for i, filename in enumerate(filenames):
+            
+            #skip over file if it doesn't exist
+            try:
+                result = h5py.File(filename, 'r')
+            except:
+                continue
+            samples_file = np.hstack([result['model_selection']['samples']['block1_values'], result['model_selection']['samples']['block0_values']])
+            samples_allchains = np.append(samples_allchains, samples_file)
+
+            if second_files:
+                try:
+                    comp_file = h5py.File(second_files[i], 'r')
+                except:
+                    continue
+                samples_file_comp = np.hstack([comp_file['model_selection']['samples']['block1_values'], comp_file['model_selection']['samples']['block0_values']])
+                samples_allchains_comp = np.append(samples_allchains_comp, samples_file_comp)
+
+        samples_allchains = np.reshape(samples_allchains, (-1, Nhyper+len(channels)))
+        samples_allchains_comp = np.reshape(samples_allchains_comp, (-1, Nhyper+len(channels)))
+
+        #loop over population models and plot histograms
+        for midx, model in submodels_dict[hyper_idx].items():
+            smdl_locs = np.argwhere(samples_allchains[:,hyper_idx]==midx).flatten()
+            if second_files:
+                comp_smdl_locs = np.argwhere(samples_allchains_comp[:,hyper_idx]==midx).flatten()
+
+            for cidx, channel in enumerate(channels):
+                factor = 50/(len(samples_allchains[:, cidx+Nhyper]))
+                h, bins, _ = ax_margs[hyper_idx,cidx].hist(samples_allchains[smdl_locs, cidx+Nhyper], \
+                    histtype='step', color=cp[midx], bins=50, ls='-', lw=1.5, \
+                    label=_labels_dict[model]+labels[0],\
+                    weights=factor*np.ones_like(samples_allchains[smdl_locs, cidx+Nhyper]))
+                if second_files:
+                    factor_comp = 50/(len(samples_allchains_comp[:, cidx+Nhyper]))
+                    h, bins, _ = ax_margs[hyper_idx,cidx].hist(samples_allchains_comp[comp_smdl_locs, cidx+Nhyper], \
+                        histtype='stepfilled', color=cp[midx], bins=50, \
+                        alpha=0.3, label=_labels_dict[model]+labels[1],\
+                        weights=factor_comp*np.ones_like(samples_allchains_comp[comp_smdl_locs, cidx+Nhyper]))
+                    h, bins, _ = ax_margs[hyper_idx,cidx].hist(samples_allchains_comp[comp_smdl_locs, cidx+Nhyper], \
+                        histtype='step', color=cp[midx], bins=50, \
+                        alpha=0.7, weights=factor_comp*np.ones_like(samples_allchains_comp[comp_smdl_locs, cidx+Nhyper]))
+
+        # format plot
+        for cidx, (channel, ax_marg) in enumerate(zip(channels, ax_margs.T)):
+            #median branching fractions
+            lower_5 = np.percentile(samples_allchains[:, cidx+Nhyper], 5)
+            upper_95 = np.percentile(samples_allchains[:, cidx+Nhyper], 95)
+            median = np.percentile(samples_allchains[:, cidx+Nhyper], 50)
+
+            ax_marg[hyper_idx].vlines([lower_5, median, upper_95], 0,20, color='black', alpha=0.5, lw=0.5)
+
+            #plot prior
+            h, bins, _ = ax_marg[hyper_idx].hist(beta_p0[:,cidx], \
+                    histtype='step', color='grey', bins=20, alpha=0.7, density=True)
+            #plot total BF
+            h, bins, _ = ax_marg[hyper_idx].hist(samples_allchains[:, cidx+Nhyper], \
+                    histtype='step', color='black', bins=50, ls='--', lw=1.0, \
+                    alpha=0.7, density=True)
+
+            ax_marg[1].set_xlabel(channel_label[cidx], fontsize=15)
+            ax_marg[hyper_idx].set_yscale('log')
+
+            ax_marg[hyper_idx].set_xlim(0,1)
+            ax_marg[hyper_idx].set_ylim(int(1e-3),20)
+            if cidx == 0:
+                ax_marg[hyper_idx].set_ylabel(r"p($\beta$)", fontsize=15)
+            else:
+                ax_marg[hyper_idx].tick_params(labelleft=False)
+        # legend
+        if hyper_idx == 0:
+            ax_margs[0,0].legend(loc='lower left', bbox_to_anchor=(0.5, 1.02), ncol=4, prop={'size':10})
+        if hyper_idx ==1:
+            ax_margs[1,0].legend(loc='lower left', bbox_to_anchor=(-1.0, 1.02), ncol=5, prop={'size':10})
+    plt.subplots_adjust(top=0.85)
+    plt.savefig(f"{_basepath}/pdfs/{figure_name}_flowKDE_infresults.pdf")
+        

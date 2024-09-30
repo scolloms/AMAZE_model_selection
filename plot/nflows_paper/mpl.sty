@@ -1,14 +1,3 @@
-pt = 1./72.27 # Hundreds of years of history... 72.27 points to an inch.
-
-jour_sizes = {"AAS": {"onecol": 246.*pt, "twocol": 513.*pt},
-              # Add more journals below. Can add more properties to each journal
-             }
-
-my_width = jour_sizes["PRD"]["onecol"]
-# Our figure's aspect ratio
-golden = (1 + 5 ** 0.5) / 2
-
-fig = plt.figure(figsize = (my_width, my_width/golden))
 
 text.usetex: True
 text.latex.preamble: \usepackage{amsmath}\usepackage{amssymb}
