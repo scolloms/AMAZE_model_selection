@@ -158,7 +158,7 @@ class NFlow():
             if use_wandb:
                 wandb.log({"train_loss": train_loss, "val_loss": total_val_loss, "unweighted_train_KL": unweighted_KL_train, "unweighted_val_KL": total_unweighted_KL_val})
 
-            #copy the best flow model 
+            #copy the best flow model
             if total_val_loss < best_val_loss:
                 best_epoch = n
                 best_val_loss = total_val_loss
@@ -214,10 +214,10 @@ class NFlow():
 
         Parameters
         ----------
-        no_samples : int
-            number of samples to take for each conditional
         coditional : array
             [chi_b, alpha]
+        no_samples : int
+            number of samples to take for each conditional
         
         Returns
         -------
