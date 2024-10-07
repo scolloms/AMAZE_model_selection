@@ -27,7 +27,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
-                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu", randch_weights=False):
+                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu"):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -64,7 +64,6 @@ class NFlow():
 
         self.channel = channel_label
         self.device = device # cuda:X where X is the slot of the GPU. run nvidia-smi in the terminal to see gpus
-        self.randch_weights = randch_weights
 
         if RNVP:
             self.network = RealNVP(n_inputs = training_inputs, n_conditional_inputs= cond_inputs,
@@ -114,10 +113,7 @@ class NFlow():
                 optimiser.zero_grad()
                 #calculate the training loss function for flow as -log_prob
                 unweighted_KL = self.network.log_prob(x_train, conditional=x_conditional)
-                if self.randch_weights==True:
-                    loss = -(unweighted_KL).mean()
-                else:
-                    loss = -(xweights*unweighted_KL).mean()
+                loss = -(xweights*unweighted_KL).mean()
                 #computes gradient of flow network parameters
                 loss.backward()
                 #steps optimtiser down gradient of loss surface
@@ -141,10 +137,8 @@ class NFlow():
 
                 #calculate flow validation loss
                 unweighted_KL_loss = self.network.log_prob(x_val, conditional=x_conditional_val)
-                if self.randch_weights==True:
-                    val_loss = - (unweighted_KL_loss).mean()
-                else:
-                    val_loss = - (x_weights_val*unweighted_KL_loss).mean()
+                val_loss = - (unweighted_KL_loss).mean()
+                val_loss = - (x_weights_val*unweighted_KL_loss).mean()
                 total_val_loss=val_loss.cpu().numpy() 
                 total_unweighted_KL_val = -unweighted_KL_loss.mean().cpu().numpy()
                 #save the loss value of the training data
@@ -249,19 +243,11 @@ class NFlow():
         #differentiated by size of conditional inputs
         #2D channel has seperate populations for training and validation data, 1D mixes up samples
         if self.cond_inputs >=2:
-            if self.randch_weights==True:
-                weights=training_samples[:,-3]/np.sum(training_samples[:,-3])
-                random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)), p=weights)
-            else:
-                random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
+            random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
             batched_hp_pairs = training_samples[random_samples,-2:]
             batch_weights = training_samples[random_samples,-3]
         else:
-            if self.randch_weights==True:
-                weights=training_samples[:,-2]/np.sum(training_samples[:,-2])
-                random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)), p=weights)
-            else:
-                random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
+            random_samples = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
             batched_hp_pairs = training_samples[random_samples, -1]
             batch_weights = training_samples[random_samples,-2]
 
@@ -294,11 +280,9 @@ class NFlow():
         else:
             val_weights = validation_data[:,-2]
 
-        if self.randch_weights==True:
-            random_samples = np.random.choice(np.shape(validation_data)[0], size=(int(self.batch_size)), p=val_weights/np.sum(val_weights))
-        else:
-            random_samples = np.random.choice(np.shape(validation_data)[0], size=(int(self.batch_size)))
-            val_weights = val_weights[random_samples]
+        
+        random_samples = np.random.choice(np.shape(validation_data)[0], size=(int(self.batch_size)))
+        val_weights = val_weights[random_samples]
         validation_hp_pairs = validation_data[random_samples,-self.cond_inputs:]
         validation_samples = validation_data[random_samples,:self.no_params]
         #reshape
