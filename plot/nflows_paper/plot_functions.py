@@ -11,6 +11,7 @@ from copy import deepcopy
 import corner
 import matplotlib.lines as mlines
 from scipy.stats import dirichlet
+from scipy.stats import loguniform
 
 from matplotlib import gridspec
 
@@ -26,6 +27,8 @@ plt.style.use(_basepath+"/mpl.sty")
 
 _params = ['mchirp','q', 'chieff', 'z']
 _channels = ['CE','CHE','GC','NSC','SMT']
+_chi_b=[0.0,0.1,0.2,0.5]
+_alpha_CE=[0.2,0.5,1.0,2.0,5.0]
 
 _param_label = ['Chirp Mass /$M_{\odot}$','Mass Ratio', 'Effective Spin', 'Redshift']
 _param_bounds = {"mchirp": (0,70), "q": (0.25,1), "chieff": (-0.5,1), "z": (0,1.25)}
@@ -39,8 +42,11 @@ _labels_dict = {"mchirp": r"$\mathcal{M}_{\rm c}$ [$M_{\odot}$]", "q": r"$q$", \
 "alpha05": r"$\alpha_\mathrm{CE}=0.5$", "alpha10": r"$\alpha_\mathrm{CE}=1.0$", \
 "alpha20": r"$\alpha_\mathrm{CE}=2.0$", "alpha50": r"$\alpha_\mathrm{CE}=5.0$", \
 "CE": r"$\texttt{CE}$", "CHE": r"$\texttt{CHE}$", "GC": r"$\texttt{GC}$", \
-"NSC": r"$\texttt{NSC}$", "SMT": r"$\texttt{SMT}$"}
+"NSC": r"$\texttt{NSC}$", "SMT": r"$\texttt{SMT}$", \
+"chi_b": r"$\chi_\mathrm{b}$", "alpha_CE": r"$\alpha_\mathrm{CE}$"}
 _Nsamps = 100000
+_channel_label =[r'$\beta_{\mathrm{CE}}$',r'$\beta_{\mathrm{CHE}}$',r'$\beta_{\mathrm{GC}}$',r'$\beta_{\mathrm{NSC}}$',r'$\beta_{\mathrm{SMT}}$']
+
 
 _models_path ='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
 
@@ -65,6 +71,29 @@ _base_corner_kwargs = dict(
     hist_kwargs=dict(density=True),
     labels=_param_label,
 )
+
+def load_result_samps(filenames, discrete_result=False, Nhyper=2, Nchannels=5, detectable=False):
+    """
+    filenames : list, array
+    """
+    samples_allchains = np.array([])
+    for i, filename in enumerate(filenames):
+        try:
+            result = h5py.File(filename, 'r')
+        except:
+            continue
+        if detectable:
+            result_key = 'detectable_samples'
+        else:
+            result_key = 'samples'
+        if discrete_result:
+            samples_file =np.hstack([result['model_selection'][result_key]['block1_values'], result['model_selection'][result_key]['block0_values']])
+        else:
+            samples_file = result['model_selection'][result_key]['block0_values']
+        samples_allchains = np.append(samples_allchains, samples_file)
+        samples_allchains = np.reshape(samples_allchains, (-1, Nhyper+Nchannels))
+
+    return samples_allchains
 
 def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=None):
     #models_path ='/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/testing_notebooks/flow_samples.hdf5'
@@ -168,45 +197,25 @@ def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None
     plt.savefig(f"{_basepath}/pdfs/{channel_label}_flowKDEmodel_corner_chib{hyperparam_idxs[0]}.pdf")
 
 def make_1D_result_discrete(filenames, second_files=None, labels = [None,None], figure_name='Discrete'):
+    plt.rcParams['figure.figsize'] = [figure_width, figure_width/4]
     channels = _channels
     submodels_dict= {0: {0: 'chi00', 1: 'chi01', 2: 'chi02', 3: 'chi05'}, \
     1: {0: 'alpha02', 1: 'alpha05', 2: 'alpha10', 3: 'alpha20', 4: 'alpha50'}}
-    channel_label =[r'$\beta_{\mathrm{CE}}$',r'$\beta_{\mathrm{CHE}}$',r'$\beta_{\mathrm{GC}}$',r'$\beta_{\mathrm{NSC}}$',r'$\beta_{\mathrm{SMT}}$']
 
     Nhyper =2
     _concentration = np.ones(len(channels))
     beta_p0 =  dirichlet.rvs(_concentration, size=100000)
 
-    samples_allchains = np.array([])
-    samples_allchains_comp = np.array([])
     fig, ax_margs = plt.subplots(2,5)
     fig.tight_layout(h_pad=3)
 
+    #add together samples from multiple files
+    samples_allchains = load_result_samps(filenames, discrete_result=True)
+    if second_files:
+        samples_allchains_comp = load_result_samps(second_files, discrete_result=True)
+
     #loop over astrophysical parameters
     for hyper_idx in [0, 1]:
-
-        #add together samples from multiple files
-        for i, filename in enumerate(filenames):
-            
-            #skip over file if it doesn't exist
-            try:
-                result = h5py.File(filename, 'r')
-            except:
-                continue
-            samples_file = np.hstack([result['model_selection']['samples']['block1_values'], result['model_selection']['samples']['block0_values']])
-            samples_allchains = np.append(samples_allchains, samples_file)
-
-            if second_files:
-                try:
-                    comp_file = h5py.File(second_files[i], 'r')
-                except:
-                    continue
-                samples_file_comp = np.hstack([comp_file['model_selection']['samples']['block1_values'], comp_file['model_selection']['samples']['block0_values']])
-                samples_allchains_comp = np.append(samples_allchains_comp, samples_file_comp)
-
-        samples_allchains = np.reshape(samples_allchains, (-1, Nhyper+len(channels)))
-        samples_allchains_comp = np.reshape(samples_allchains_comp, (-1, Nhyper+len(channels)))
-
         #loop over population models and plot histograms
         for midx, model in submodels_dict[hyper_idx].items():
             smdl_locs = np.argwhere(samples_allchains[:,hyper_idx]==midx).flatten()
@@ -246,7 +255,7 @@ def make_1D_result_discrete(filenames, second_files=None, labels = [None,None], 
                     histtype='step', color='black', bins=50, ls='--', lw=1.0, \
                     alpha=0.7, density=True)
 
-            ax_marg[1].set_xlabel(channel_label[cidx], fontsize=15)
+            ax_marg[1].set_xlabel(_channel_label[cidx], fontsize=15)
             ax_marg[hyper_idx].set_yscale('log')
 
             ax_marg[hyper_idx].set_xlim(0,1)
@@ -263,3 +272,122 @@ def make_1D_result_discrete(filenames, second_files=None, labels = [None,None], 
     plt.subplots_adjust(top=0.85)
     plt.savefig(f"{_basepath}/pdfs/{figure_name}_flowKDE_infresults.pdf")
         
+
+def make_1D_result_continuous(filenames, second_files=None, figure_name='Continuous', detectable=False):
+    channels = _channels
+    plt.rcParams['figure.figsize'] = [figure_width, figure_width/2]
+    colors = ['royalblue','lightskyblue','darkblue']
+    _concentration = np.ones(len(channels))
+    beta_p0 =  dirichlet.rvs(_concentration, size=100000)
+    #alphaCE_p0 =  loguniform.rvs(_concentration, size=100000)
+    Nhyper =2
+
+    fig = plt.figure(layout='constrained')
+    subfigs = fig.subfigures(2, 1, height_ratios=[1.,1.])
+    ax_chibalpha = subfigs[0].subplots(1, 2)
+    ax_margs = subfigs[1].subplots(1, 5)
+
+    #add together samples from multiple files
+    samples_allchains = load_result_samps(filenames, detectable=detectable)
+    if second_files:
+        samples_allchains_comp = load_result_samps(second_files, detectable=detectable)
+    else:
+        samples_allchains_comp = np.array([])
+
+    for i, samples in enumerate(np.array([samps for samps in [samples_allchains, samples_allchains_comp] if len(samps)>0])):
+        h, bins, _ = ax_chibalpha[0].hist(samples[:, 0], density=True,\
+            histtype='step', color=colors[i], bins=50, ls='-', lw=1.5)
+        h, bins, _ = ax_chibalpha[1].hist(samples[:, 1], density=True,\
+            histtype='step', color=colors[i], bins=50, ls='-', lw=1.5)
+
+        for cidx, channel in enumerate(channels):
+            h, bins, _ = ax_margs[cidx].hist(samples[:,cidx+Nhyper], density=True,\
+                histtype='step', color=colors[i], bins=50, ls='-', lw=1.5)
+
+    # format plot
+    chi_b_lim = ax_chibalpha[0].get_ylim()[1] + 50
+    alpha_CE_lim = ax_chibalpha[1].get_ylim()[1] +2
+    #plot training lines
+    ax_chibalpha[0].vlines(_chi_b, ax_chibalpha[0].get_ylim()[0], chi_b_lim, color='black', alpha=0.5)
+    ax_chibalpha[1].vlines(_alpha_CE, ax_chibalpha[1].get_ylim()[0], alpha_CE_lim, color='black', alpha=0.5)
+    #plot alpha_CE prior
+    """ax_chibalpha[1].hist(beta_p0[:,cidx], \
+                histtype='step', color='grey', bins=20, alpha=0.7, density=True)"""
+
+    ax_chibalpha[0].autoscale(tight=True, axis='y')
+    ax_chibalpha[1].autoscale(tight=True, axis='y')
+    ax_chibalpha[0].set_xlabel(_labels_dict['chi_b'])
+    ax_chibalpha[1].set_xlabel(_labels_dict['alpha_CE'])
+    ax_chibalpha[0].set_ylabel('p('+_labels_dict['chi_b']+')')
+    ax_chibalpha[1].set_ylabel('p('+_labels_dict['alpha_CE']+')')
+
+    for i, ax_marg in enumerate(np.append(ax_chibalpha,ax_margs).flatten()):
+
+        #median branching fractions
+        q_mid = np.percentile(samples_allchains[:, i], 50)
+        q_m = q_mid - np.percentile(samples_allchains[:, i], 5)
+        q_p = np.percentile(samples_allchains[:, i], 95) - q_mid
+
+        title_fmt=".2f"
+        fmt = "{{0:{0}}}".format(title_fmt).format
+        title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
+        title = title.format(fmt(q_mid), fmt(q_m), fmt(q_p))
+        ax_marg.set_yscale('log')
+        ax_marg.set_title(fr'${title}$')
+
+    for cidx, channel in enumerate(channels):
+
+        #plot prior
+        h, bins, _ = ax_margs[cidx].hist(beta_p0[:,cidx], \
+                histtype='step', color='grey', bins=20, alpha=0.7, density=True)
+
+        ax_margs[cidx].set_xlabel(_channel_label[cidx])
+
+        ax_margs[cidx].set_xlim(0,1)
+        if cidx == 0:
+            ax_margs[cidx].set_ylabel(r"p($\beta$)")
+        else:
+            ax_margs[cidx].tick_params(labelleft=False)
+    if detectable:
+        subfigs[0].delaxes(ax_chibalpha[0])
+        subfigs[0].delaxes(ax_chibalpha[1])
+        fig.sca(subfigs[1])
+    plt.savefig(f"{_basepath}/pdfs/{figure_name}_flowKDE_infresults.pdf")
+
+def save_detectable_betas(filenames, analysis_name):
+    #in case detectable betas weren't saved during model_select run, save them now
+    #for continuous results only
+
+    params = ['mchirp','q', 'chieff', 'z']
+    channels =['CE', 'CHE', 'GC', 'NSC', 'SMT']
+
+    #initialise flows
+    model_names, flow = get_models(_models_path, channels, params, use_flows=True, device='cpu',\
+        no_bins=[5,4,4,5,4], sensitivity='midhighlatelow')
+
+    #read all samples
+    samples_allchains = load_result_samps(filenames)
+    
+    converted_betas = np.zeros((samples_allchains[:,2:].shape[0], samples_allchains[:,2:].shape[1]))
+        
+    alphas = np.zeros((samples_allchains.shape[0], len(channels)))
+    #get alpha for 5 channels given chi_b, alpha_CE in each sample
+    for i, samp in enumerate(tqdm(samples_allchains)):
+        for cidx, chnl in enumerate(channels):
+            smdl = flow[chnl]
+            if chnl == 'CE':
+                alphas[i, cidx] = smdl.get_alpha(samp[:2])
+            else:
+                alphas[i, cidx] = smdl.get_alpha([samp[:1][0], 1.])
+
+    converted_betas = (samples_allchains[:,2:] * alphas)
+    #divide by sum across channels
+    converted_betas /= converted_betas.sum(axis=1, keepdims=True)
+
+    columns = ['p0','p1']
+    for channel in channels:
+        columns.append('beta_'+channel)
+        
+    df = pd.DataFrame(np.hstack([samples_allchains[:,:2],converted_betas]), columns=columns)
+    df.to_hdf(f'{_basepath}/data/{analysis_name}_detectable_betas.hdf5', key='model_selection/detectable_samples')
+
