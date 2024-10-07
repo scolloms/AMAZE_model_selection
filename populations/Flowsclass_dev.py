@@ -51,7 +51,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False):
+    def from_samples(channel, samples, params, sensitivity, detectable=False, device='cpu', no_bins=4, normalize=False):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -72,8 +72,6 @@ class FlowModel(Model):
         sensitivity : str
             Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
             Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
-        normalize : bool
-            state of normalisation, used in sampling for the KDE model, but defunt here.
         detectable : bool
             whether or not to construct a detection weighted flow model
         deivce : str
@@ -84,11 +82,11 @@ class FlowModel(Model):
         FlowModel : obj
         """
 
-        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins,\
-            use_unityweights=use_unityweights, randch_weights=randch_weights)
+        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins)
 
 
-    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu', no_bins=4, use_unityweights=False, randch_weights=False):
+    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu',\
+         no_bins=4, no_neurons=128):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -188,9 +186,6 @@ class FlowModel(Model):
                 else:
                     optimal_snrs[key] = np.nan*np.ones(len(sbml_samps))
 
-                #if not using cosmo_weights then set to None, later sets combined weights to be 1
-                if use_unityweights == True:
-                    cosmo_weights[key] = None
 
                 # Combine the cosmological and detection weights
                 # detectable only used for plotting
@@ -208,10 +203,7 @@ class FlowModel(Model):
                         combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
                     else:
                         combined_weights[key] = np.ones(len(sbml_samps))
-                if use_unityweights == True:
-                    pass
-                else:
-                    combined_weights[key] /= np.sum(combined_weights[key])
+                combined_weights[key] /= np.sum(combined_weights[key])
 
         #sets weights as class properties
         self.combined_weights = combined_weights
@@ -222,7 +214,7 @@ class FlowModel(Model):
         
         #flow network parameters
         self.no_trans = 6
-        self.no_neurons = 164
+        self.no_neurons = no_neurons
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
@@ -231,15 +223,13 @@ class FlowModel(Model):
 
         #number of data points (total) for each channel
         #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
-        if use_unityweights==True:
-            channel_samples=[20e6,864124,896611,582961, 4e6]
-        else:
-            channel_samples = [19912038,864124,896611,582961, 4e6]
+        
+        channel_samples = [19912038,864124,896611,582961, 4e6]
         self.no_binaries = int(channel_samples[channel_id])
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins, randch_weights=randch_weights)
+                    self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
         self.flow = flow
 
 
@@ -336,7 +326,7 @@ class FlowModel(Model):
             #format which chi_bs and alphas match which parameter values being read in
             chi_b_alpha_pairs= np.zeros((20, 2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
-            chi_b_alpha_pairs[:,1] = np.tile(self.hps[1], np.shape(self.hps[0])[0])
+            chi_b_alpha_pairs[:,1] = np.tile(np.log(self.hps[1]), np.shape(self.hps[0])[0])
             if testCEsmdl:
                 chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs, test_model_id_flat, axis=0)
 
@@ -412,7 +402,7 @@ class FlowModel(Model):
         samps[:,3] = self.expistic(logit_samps[:,3], self.mappings[4], self.mappings[5])
         return samps
 
-    def __call__(self, data, conditional_hps, smallest_N, prior_pdf=None, proc_idx=None, return_dict=None):
+    def __call__(self, data, conditional_hps, smallest_N, prior_pdf=None):
         """
         Calculate the likelihood of the observations give a particular hypermodel (given by conditional_hps).
         (this is the hyperlikelihood).
@@ -423,16 +413,12 @@ class FlowModel(Model):
             posterior samples of observations or mock observations for which to calculate the likelihoods,
             shape[Nobs x Nsample x Nparams]
         conditional_hp_idxs : array
-            indices of hyperparameters for require submodel. of shape [self.conditionals]
+            values of hyperparameters for require submodel, of shape [self.conditionals]
         prior_pdf : array
             p(x) prior on the data
             If prior_pdf is None, each observation is expected to have equal
             posterior probability. Otherwise, the prior weights should be
             provided as the dimemsions [samples(Nobs), samples(Nsamps)].
-        proc_idx : int
-            index of return_dict for multiprocessing
-        return_dict : dict
-            stores a dictionary of likelihoods for multiprocessing
 
         Returns
         -------
@@ -440,23 +426,24 @@ class FlowModel(Model):
         the log likelihoods obtained from the flow model for each event, shape [Nobs]
         """
         
+        #initialise log likelihood as -infnity
         likelihood = np.ones(data.shape[0]) * -np.inf
-        prior_pdf = prior_pdf if prior_pdf is not None else np.ones((data.shape[0],data.shape[1]))
-        prior_pdf[prior_pdf==0] = 1e-50
 
-        #instead of conditional hp indxs here we need the actual values for continuous inference
-        #TO DO: implement check here that this is always the right shape
-        conditional_hps = np.asarray(conditional_hps)
+        #set equal prior for all samples if prior is not specified
+        prior_pdf = prior_pdf if prior_pdf is not None else np.ones((data.shape[0],data.shape[1]))
+        if np.any(prior_pdf == 0.):
+            raise Exception('One or more of the prior samples is equal to zero')
 
         #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(data)
 
         #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
+        conditional_hps = np.asarray(conditional_hps)
         conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
         #calculates likelihoods for all events and all samples
-        likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals) #- np.log(prior_pdf)
+        likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals)
 
         if smallest_N is not None:
             #LSE population probability plus uniform regularisation
@@ -466,16 +453,13 @@ class FlowModel(Model):
 
 
         likelihoods_per_samp = likelihoods_per_samp - np.log(prior_pdf)
-        #checks for nans
+        #checks for nans in likelihood
         if np.any(np.isnan(likelihoods_per_samp)):
             raise Exception('Obs data is outside of range of samples for channel - cannot logistic map.')
 
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
         likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
-        # store value for multiprocessing
-        if return_dict is not None:
-            return_dict[proc_idx] = likelihood
         
         return likelihood
 
@@ -624,7 +608,9 @@ class FlowModel(Model):
         save_filename = f'{filepath}{channel}'
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
-    def load_model(self, filepath, channel, device='cpu'):
+    def load_model(self, filepath, channel, device='cuda:0'):
+
+        #load no. neurons and no. bins from config and reinitialise flow if config for flows exists
         if os.path.isfile(f'{filepath}flowconfig.json'):
             with open(f'{filepath}flowconfig.json', 'r') as f:
                 config = json.load(f)
@@ -636,7 +622,8 @@ class FlowModel(Model):
 
             self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
                 self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
-
+        
+        #load in actual flow model, and mappings
         self.flow.load_model(f'{filepath}{channel}.pt')
         self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
         if self.channel_label == 'GC':
@@ -649,7 +636,7 @@ class FlowModel(Model):
         if self.channel_label == "CE":
             alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
-            alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
+            alpha = np.exp(alpha_interp([hyperparams[0], hyperparams[1]]))
         else:
             alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
             bounds_error=False, method='pchip', fill_value=None)

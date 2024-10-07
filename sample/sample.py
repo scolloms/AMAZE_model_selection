@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import scipy as sp
 from scipy.stats import dirichlet
+from scipy.stats import loguniform
 import pandas as pd
 from functools import reduce
 import operator
@@ -115,10 +116,9 @@ posteriors!".format(self.posterior_name))
         p0 = np.empty(shape=(self.nwalkers, self.ndim))
 
         # first, for the population hyperparameters
-        #selects points in uniform prior for hyperparams chi_b and alpha
-        for idx in np.arange(self.Nhyper):
-            #changed for continuous flows- initiate in values of chi_b and alpha range given bounds of the hyperparameters
-            p0[:,idx] = np.random.uniform(self.hyperparam_bounds[idx][0], self.hyperparam_bounds[idx][1], size=self.nwalkers)
+        #selects points in uniform prior for hyperparams chi_b, and loguniform in alpha
+        p0[:,0] = np.random.uniform(self.hyperparam_bounds[0][0], self.hyperparam_bounds[0][1], size=self.nwalkers)
+        p0[:,1] = loguniform.rvs(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
         # second, for the branching fractions (we have Nchannel-1 betasin the inference because of the implicit constraint that Sum(betas) = 1
         _concentration = np.ones(len(self.channels))
         beta_p0 =  dirichlet.rvs(_concentration, p0.shape[0])
@@ -176,8 +176,8 @@ def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
     if np.sum(betas_tmp) != 1.0:
         return -np.inf
 
-    # Dirchlet distribution prior for betas
-    return dirichlet.logpdf(betas_tmp, _concentration)
+    # Dirchlet distribution prior for betas, plus uniform prior on log(alphaCE)
+    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(x[1],a=hyperparam_bounds[1][0], b=hyperparam_bounds[1][1])
 
 
 def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
@@ -206,20 +206,14 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
     alpha = 0
 
     # Iterate over channels in this submodel, return likelihood of population model
-    #can't vectorise over this unless its a numpy array of flows, which doesn't seem like the best coding practice
-        
-        #calls popModels __call__(data) to return likelihood.
-        # add contribution from this channel
     if use_flows==True:
         for channel, beta in zip(channels, betas):
+            #get corresponding flow to channel
             smdl = pop_models[channel]
-            #LSE over channels
-            #keep lnprob as shape [Nobs]
-            #this could be done without some janky if statement but would need some rewiring of alpha
-            #TO CHECK: setting duplicate values of alpha in the dictionary for all orinary keys
+            #sum likelihood over channels, keep track of detection efficiency
             if channel == 'CE':
-                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], smallest_N, prior_pdf=prior_pdf)], axis=0)
-                alpha += beta * smdl.get_alpha(x[:len(submodels_dict)])
+                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, [x[0], np.log(x[1])], smallest_N, prior_pdf=prior_pdf)], axis=0)
+                alpha += beta * smdl.get_alpha([x[0], np.log(x[1])])
             else:
                 lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)][0], smallest_N, prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([x[:len(submodels_dict)][0], 1.])
@@ -238,7 +232,7 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data, smallest_N))], axis=0)
             alpha += beta * smdl.alpha
 
-    #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
+    #returns lnprob summed over events (probability multiplied over events, divided by detection efficiency)
     return (lnprob-np.log(alpha)).sum()
 
 
@@ -262,7 +256,6 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
     # Likelihood
     log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N)
     
-
     return log_like + log_prior #evidence is divided out
 
 
