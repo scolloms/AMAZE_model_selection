@@ -212,8 +212,8 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
             smdl = pop_models[channel]
             #sum likelihood over channels, keep track of detection efficiency
             if channel == 'CE':
-                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, [x[0], np.log(x[1])], smallest_N, prior_pdf=prior_pdf)], axis=0)
-                alpha += beta * smdl.get_alpha([x[0], np.log(x[1])])
+                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], smallest_N, prior_pdf=prior_pdf)], axis=0)
+                alpha += beta * smdl.get_alpha([x[:len(submodels_dict)]])
             else:
                 lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)][0], smallest_N, prior_pdf=prior_pdf)], axis=0)
                 alpha += beta * smdl.get_alpha([x[:len(submodels_dict)][0], 1.])

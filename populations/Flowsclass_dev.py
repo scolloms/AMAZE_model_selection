@@ -392,6 +392,10 @@ class FlowModel(Model):
         """
         Samples Flow
         """
+        #log alphaCE
+        if self.channel_label =='CE':
+            conditional[1] = np.log(conditional[1])
+
         logit_samps = self.flow.sample(conditional,N)
 
         #map samples back from logit space
@@ -438,6 +442,9 @@ class FlowModel(Model):
         mapped_obs = self.map_obs(data)
 
         #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
+
+        if self.channel_label =='CE':
+            conditional_hps[1] = np.log(conditional_hps[1])
         conditional_hps = np.asarray(conditional_hps)
         conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
@@ -463,18 +470,21 @@ class FlowModel(Model):
         
         return likelihood
 
-    def get_latent_samps(self, samps, conds):
+    def get_latent_samps(self, samps, conditional):
 
-        conds = np.asarray(conds)
+        conditional = np.asarray(conditional)
+        if self.channel_label =='CE':
+            conditional[1] = np.log(conditional[1])
+        
 
         #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(samps)
 
         #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
-        conds = np.repeat([conds],np.shape(mapped_obs)[1], axis=0)
-        conds = np.repeat([conds],np.shape(mapped_obs)[0], axis=0)
+        conditional = np.repeat([conditional],np.shape(mapped_obs)[1], axis=0)
+        conditional = np.repeat([conditional],np.shape(mapped_obs)[0], axis=0)
 
-        return self.flow.get_latent_samps(mapped_obs, conds)
+        return self.flow.get_latent_samps(mapped_obs, conditional)
 
     def map_obs(self,data):
         """
@@ -632,11 +642,12 @@ class FlowModel(Model):
             self.mappings[self.mappings==None] = 1.
 
     def get_alpha(self, hyperparams):
+
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
         if self.channel_label == "CE":
             alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
-            alpha = np.exp(alpha_interp([hyperparams[0], hyperparams[1]]))
+            alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
         else:
             alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
             bounds_error=False, method='pchip', fill_value=None)
