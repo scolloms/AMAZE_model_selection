@@ -1,0 +1,22 @@
+# Typical submit file options
+universe = vanilla
+log = outdir/log_seed$(seed).txt
+error = outdir/err_seed$(seed).txt
+output = outdir/out_seed$(seed).txt
+
+# Fill in with your own script, arguments and input files
+# Note that you don't need to transfer any software
+executable = run_model_select_condor.sh
+arguments = $(seed)
+#transfer_input_files =
+
+# Resource requirements
+request_cpus = 1
+request_memory = 16GB
+request_disk = 4GB
+
+request_gpus = 1
+#require_gpus = (GlobalMemoryMb - (MemoryUsage?:0) > 10000 )
+
+# Number of jobs
+queue seed from run_seeds.txt 
