@@ -1,0 +1,22 @@
+{
+    "CE": {
+        "neurons": 128,
+        "bins": 5
+    },
+    "CHE": {
+        "neurons": 128,
+        "bins": 4
+    },
+    "GC": {
+        "neurons": 128,
+        "bins": 4
+    },
+    "NSC": {
+        "neurons": 128,
+        "bins": 5
+    },
+    "SMT": {
+        "neurons": 128,
+        "bins": 4
+    }
+}
