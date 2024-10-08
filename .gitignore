@@ -7,7 +7,6 @@
 *.ipynb_checkpoints
 *.hdf5
 *.tar.gz
-*.pt
 *.npy
 *.txt
 *.png
@@ -17,4 +16,3 @@ wandb/
 *.h5
 *.zip
 *.prior
-/rns
