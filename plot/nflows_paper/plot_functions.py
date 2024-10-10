@@ -100,7 +100,7 @@ def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=
     
     popsynth_outputs = read_hdf5(_models_path, channel_label) # read all data from hdf5 file
 
-    weighted_flow = FlowModel(channel_label, popsynth_outputs, _params, no_bins=5)
+    weighted_flow = FlowModel(channel_label, popsynth_outputs, _params, flow_path=flow_dir)
     model_names, KDE_models = get_models(_models_path, [channel_label], _params, use_flows=False, spin_distr=None, normalize=False, detectable=False)
 
     hyperparams = list(set([x.split('/', 1)[1] for x in model_names]))
@@ -145,7 +145,7 @@ def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=
     print('samples saved')
 
 
-def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None, conditional=None):
+def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None, conditional=None, plot_KDE=False):
 
     if justplot==False:
         sample_pop_corner( flow_dir, channel_label, conditional, KDE_hyperparam_idxs=hyperparam_idxs)
@@ -184,7 +184,8 @@ def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None
             fig =corner.corner(models_dict[tuple(hyperparam_idxs)],  weights=weights_dict[tuple(hyperparam_idxs)], **model_kwargs)
         else:
             fig =corner.corner(models_dict[hyperparam_idxs[0]],  weights=weights_dict[hyperparam_idxs[0]], **model_kwargs)
-        corner.corner(kde_samples, fig=fig, **corner_kwargs_kde)
+        if plot_KDE==True:
+            corner.corner(kde_samples, fig=fig, **corner_kwargs_kde)
         corner.corner(flow_samples, fig=fig, **corner_kwargs_flow)
     plt.legend(
             handles=[
