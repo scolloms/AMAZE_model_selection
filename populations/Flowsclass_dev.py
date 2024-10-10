@@ -539,7 +539,12 @@ class FlowModel(Model):
             data *=rescale_max
         return(data)
 
-    def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
+    def train(self, no_trans, no_bins, no_neurons, lr, epochs, batch_no, filepath, channel, use_wandb):
+        channel_config = {'transforms':no_trans, 'neurons':no_neurons,'bins':no_bins}
+        channel_json = {}
+        channel_json[self.channel_label] = channel_config
+        with open(f'{filepath}flowconfig.json', 'w') as f:
+            json.dump(channel_json, f)
 
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
         save_filename = f'{filepath}{channel}'
