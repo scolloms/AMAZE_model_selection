@@ -51,7 +51,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, sensitivity, detectable=False, device='cpu', no_bins=4, normalize=False):
+    def from_samples(channel, samples, params, flow_path, sensitivity, device='cpu'):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -72,8 +72,7 @@ class FlowModel(Model):
         sensitivity : str
             Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
             Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
-        detectable : bool
-            whether or not to construct a detection weighted flow model
+            to calculate the detection efficiency
         deivce : str
             Device on which to run the flow. default is 'cpu', otherwise choose 'cuda:X' where X is the GPU slot.
         
@@ -82,11 +81,10 @@ class FlowModel(Model):
         FlowModel : obj
         """
 
-        return FlowModel(channel, samples, params, sensitivity, normalize=normalize, detectable=detectable, device=device, no_bins=no_bins)
+        return FlowModel(channel, samples, params, flow_path, sensitivity, device=device)
 
 
-    def __init__(self, channel, samples, params, sensitivity=None, normalize=False, detectable=False, device='cpu',\
-         no_bins=4, no_neurons=128):
+    def __init__(self, channel, samples, params, flow_path, sensitivity=None, device='cpu'):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -102,10 +100,7 @@ class FlowModel(Model):
         sensitivity : str
             Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
             Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
-        normalize : bool
-            state of normalisation, used in sampling for the KDE model, but defunt here.
-        detectable : bool
-            whether or not to construct a detection weighted flow model
+            to calculate the detection efficiency
         deivce : str
             Device on which to run the flow. default is 'cpu', otherwise choose 'cuda:X' where X is the GPU slot.
         """
@@ -115,8 +110,6 @@ class FlowModel(Model):
         self.samples = samples
         self.params = params
         self.sensitivity = sensitivity
-        self.normalize = normalize
-        self.detectable = detectable
 
         #initialises list of population hyperparameter values
         self.hps = [[0.,0.1,0.2,0.5]]
@@ -189,20 +182,10 @@ class FlowModel(Model):
 
                 # Combine the cosmological and detection weights
                 # detectable only used for plotting
-                if self.detectable == True:
-                    if (cosmo_weights[key] is not None) and (pdets[key] is not None):
-                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key])) * (pdets[key] / np.sum(pdets[key]))
-                    elif pdets[key] is not None:
-                        combined_weights[key] = (pdets[key] / np.sum(pdets[key]))
-                    elif (cosmo_weights[key] is not None):
-                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
-                    else:
-                        combined_weights[key] = np.ones(len(sbml_samps))
+                if (cosmo_weights[key] is not None):
+                    combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
                 else:
-                    if (cosmo_weights[key] is not None):
-                        combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
-                    else:
-                        combined_weights[key] = np.ones(len(sbml_samps))
+                    combined_weights[key] = np.ones(len(sbml_samps))
                 combined_weights[key] /= np.sum(combined_weights[key])
 
         #sets weights as class properties
@@ -213,19 +196,30 @@ class FlowModel(Model):
         self.cosmo_weights = cosmo_weights
         
         #flow network parameters
-        self.no_trans = 6
-        self.no_neurons = no_neurons
+        if os.path.isfile(f'{flow_path}flowconfig.json'):
+            with open(f'{flow_path}flowconfig.json', 'r') as f:
+                config = json.load(f)
+            self.no_trans = config[self.channel_label]['transforms']
+            self.no_neurons = config[self.channel_label]['neurons']
+            no_bins = config[self.channel_label]['bins']
+        else:
+            self.no_trans = 6
+            self.no_neurons = 128
+            no_bins=4
+            if self.channel_label=='CE' or self.channel_label=='NSC':
+                no_bins=5
+
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
         channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
-        channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
+        self.channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
 
         #number of data points (total) for each channel
         #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
         
         channel_samples = [19912038,864124,896611,582961, 4e6]
-        self.no_binaries = int(channel_samples[channel_id])
+        self.no_binaries = int(channel_samples[self.channel_id])
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
@@ -261,13 +255,11 @@ class FlowModel(Model):
             for the non-CE channels this is the same as the training data.
             for the CE channel this is set to 2 of the 20 sub-populations
         mappings : array
-            constants used to map the mchirp, q, and z distributions.
+            constants used to map the mchirp, q, and z distributions with logistic mappings.
         """
 
         print('Mapping population synthesis samples for training...')
         
-        channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
-        channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
 
         if self.channel_label != 'CE':
             #Channels with 1D hyperparameters: SMT, GC, NSC, CHE
@@ -289,7 +281,7 @@ class FlowModel(Model):
             #map samples before dividing into training and validation data
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
-            if channel_id == 2:
+            if self.channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
                 models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1]+0.001)
@@ -547,6 +539,49 @@ class FlowModel(Model):
             data *=rescale_max
         return(data)
 
+    def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
+
+        training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
+        save_filename = f'{filepath}{channel}'
+        self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
+
+    def load_model(self, filepath, channel, device='cuda:0'):
+
+        #load no. neurons and no. bins from config and reinitialise flow if config for flows exists
+        if os.path.isfile(f'{filepath}flowconfig.json'):
+            with open(f'{filepath}flowconfig.json', 'r') as f:
+                config = json.load(f)
+            self.no_neurons = config[self.channel_label]['neurons']
+            no_bins = config[self.channel_label]['bins']
+            batch_size=10000
+
+            print(self.channel_label, self.no_neurons)
+
+            self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
+                self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+        
+        #load in actual flow model, and mappings
+        self.flow.load_model(f'{filepath}{channel}.pt')
+        self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
+        if self.channel_label == 'GC':
+            self.mappings[self.mappings==None] = 1.001
+        else:
+            self.mappings[self.mappings==None] = 1.
+
+    def get_alpha(self, hyperparams):
+
+        alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
+        if self.channel_label == "CE":
+            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
+                bounds_error=False, method='pchip', fill_value=None)
+            alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
+        else:
+            alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
+            bounds_error=False, method='pchip', fill_value=None)
+            alpha = np.exp(alpha_interp([hyperparams[0]]))
+        return alpha
+
+
     def wandb_init(self, epochs):
         """
         Initialises a wandb sweep and then uses a wandb agent to train a flow under that sweeps regimes
@@ -611,240 +646,3 @@ class FlowModel(Model):
                     total_hps, self.channel_label, RNVP=False, device=device, no_bins=config.no_bins)
             self.flow = flow
             self.train(config.lr, config.epochs, config.batch_no, f"./wandb_models/{wandb.run.id}_wandb", self.channel_label, True)
-
-    def train(self, lr, epochs, batch_no, filepath, channel, use_wandb):
-
-        training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
-        save_filename = f'{filepath}{channel}'
-        self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
-
-    def load_model(self, filepath, channel, device='cuda:0'):
-
-        #load no. neurons and no. bins from config and reinitialise flow if config for flows exists
-        if os.path.isfile(f'{filepath}flowconfig.json'):
-            with open(f'{filepath}flowconfig.json', 'r') as f:
-                config = json.load(f)
-            self.no_neurons = config[self.channel_label]['neurons']
-            no_bins = config[self.channel_label]['bins']
-            batch_size=10000
-
-            print(self.channel_label, self.no_neurons)
-
-            self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
-                self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
-        
-        #load in actual flow model, and mappings
-        self.flow.load_model(f'{filepath}{channel}.pt')
-        self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
-        if self.channel_label == 'GC':
-            self.mappings[self.mappings==None] = 1.001
-        else:
-            self.mappings[self.mappings==None] = 1.
-
-    def get_alpha(self, hyperparams):
-
-        alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
-        if self.channel_label == "CE":
-            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
-                bounds_error=False, method='pchip', fill_value=None)
-            alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
-        else:
-            alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
-            bounds_error=False, method='pchip', fill_value=None)
-            alpha = np.exp(alpha_interp([hyperparams[0]]))
-        return alpha
-
-
-    ######CURRENTLY don't worry about functions below here - theyre used for plotting or simulated events
-    """
-    def marginalize(self, params, alpha, bandwidth=_kde_bandwidth):
-
-        #Generate a new, lower dimensional, KDEModel from the parameters in [params]
-
-        label = self.label
-        for p in params:
-            label += '_'+p
-        label += '_marginal'
-
-        return KDEModel(label, self.samples[params], params, bandwidth, self.cosmo_weights, self.sensitivity, self.pdets, self.optimal_snrs, alpha, self.normalize, self.detectable)
-
-
-    def generate_observations(self, Nobs, uncertainty, sample_from_kde=False, sensitivity='design_network', multiproc=True, verbose=False):
-
-        #Generates samples from KDE model. This will generated Nobs samples, storing the attribute 'self.observations' with dimensions [Nobs x Nparam]. 
-
-        if verbose:
-            print("   drawing {} observations from channel {}...".format(Nobs, self.label))
-
-        ### If sample_from_KDE is specified... ###
-        # draw samples from the detection-weighted KDE, which is quicker,
-        # but not compatible with SNR-dependent uncertainty
-        if sample_from_kde==True:
-            if uncertainty=='snr':
-                raise ValueError("You cannot sample from the detection-weighted KDE with an SNR-dependent measurement uncertainty, since we need the detection probabilities and optimal SNRs of individual systems! If you wish to use SNR-weighted uncertainties, please do not use the argument 'sample-from-kde'.")
-            observations = self.sample(Nobs)
-            self.observations = observations
-            return observations
-
-        ### Otherwise, draw samples from the population used to construct the KDEs ###
-        self.snr_thresh = _PSD_defaults['snr_network'] if 'network' in sensitivity else _PSD_defaults['snr_single']
-
-        # allocate empty arrays
-        observations = np.zeros((Nobs, self.samples.shape[-1]))
-        snrs = np.zeros(Nobs)
-        Thetas = np.zeros(Nobs)
-
-        # find indices for systems that can potentially be detected
-        # loop until we have enough systems with SNRs greater than the SNR threshold
-        recovered_idxs = []
-        for idx in tqdm(np.arange(Nobs), total=Nobs):
-            detected = False
-            while detected==False:
-                sys_idx = np.random.choice(np.arange(len(self.pdets)), p=(self.cosmo_weights/np.sum(self.cosmo_weights)))
-                pdet = self.pdets[sys_idx]
-                snr_opt = self.optimal_snrs[sys_idx]
-                Theta = float(projection_factor_interp(np.random.random()))
-
-                # if the SNR is greater than the threshold, the system is "observed"
-                if snr_opt*Theta >= self.snr_thresh:
-                    if sys_idx in recovered_idxs:
-                        continue
-                    detected = True
-                    observations[idx,:] = np.asarray(self.samples.iloc[sys_idx])
-                    snrs[idx] = snr_opt*Theta
-                    Thetas[idx] = Theta
-                    recovered_idxs.append(sys_idx)
-
-        self.observations = observations
-        self.snrs = snrs
-        self.Thetas = Thetas
-        return observations
-
-
-    def measurement_uncertainty(self, Nsamps, method='delta', observation_noise=False, verbose=False):
-
-        #Mocks up measurement uncertainty from observations using specified method
-
-        if verbose:
-            print("   mocking up observation uncertainties for the {} channel using the '{}' method...".format(self.label, method))
-
-        params = self.params
-
-        if method=='delta':
-            # assume a delta function measurement
-            obsdata = np.expand_dims(self.observations, 1)
-            return obsdata
-
-        # set up obsdata as [obs, samps, params]
-        obsdata = np.zeros((self.observations.shape[0], Nsamps, self.observations.shape[-1]))
-        
-        # for 'gwevents', assume snr-independent measurement uncertainty based on the typical values for events in the catalog
-        if method == "gwevents":
-            for idx, obs in tqdm(enumerate(self.observations), total=len(self.observations)):
-                for pidx in np.arange(self.observations.shape[-1]):
-                    mu = obs[pidx]
-                    sigma = [_posterior_sigmas[param] for param in self.samples.columns][pidx]
-                    low_lim = self.param_bounds[pidx][0]
-                    high_lim = self.param_bounds[pidx][1]
-
-                    # construnct gaussian and drawn samples
-                    dist = norm(loc=mu, scale=sigma)
-
-                    # if observation_noise is specified, wiggle around the observed value
-                    if observation_noise==True:
-                        mu_obs = dist.rvs()
-                        dist = norm(loc=mu_obs, scale=sigma)
-
-                    samps = dist.rvs(Nsamps)
-
-                    # reflect samples if drawn past the parameters bounds
-                    above_idxs = np.argwhere(samps>high_lim)
-                    samps[above_idxs] = high_lim - (samps[above_idxs]-high_lim)
-                    below_idxs = np.argwhere(samps<low_lim)
-                    samps[below_idxs] = low_lim + (low_lim - samps[below_idxs])
-
-                    obsdata[idx, :, pidx] = samps
-
-
-        # for 'snr', use SNR-dependent measurement uncertainty following procedures from Fishbach, Holz, & Farr 2018 (2018ApJ...863L..41F)
-        if method == "snr":
-
-            # to use SNR-dependent uncertainty, we need to make sure that the correct parameters are supplied
-
-            for idx, (obs,snr,Theta) in tqdm(enumerate(zip(self.observations, self.snrs, self.Thetas)), total=len(self.observations)):
-                # convert to mchirp, q
-                if set(['mchirp','q']).issubset(set(params)):
-                    mc_true = obs[params.index('mchirp')]
-                    q_true = obs[params.index('q')]
-                elif set(['mtot','q']).issubset(set(params)):
-                    mc_true = mtotq_to_mc(obs[params.index('mtot')], obs[params.index('q')])
-                    q_true = obs[params.index('q')]
-                elif set(['mtot','eta']).issubset(set(params)):
-                    mc_true, q_true = mtoteta_to_mchirpq(obs[params].index('mtot'), obs[params].index('q'))
-                else:
-                    raise ValueError("You need to have a mass and mass ratio parameter to to SNR-weighted uncertainty!")
-
-                z_true = obs[params.index('z')]
-                mcdet_true = mc_true*(1+z_true)
-                eta_true = q_true * (1+q_true)**(-2)
-                Theta_true = Theta
-                dL_true = cosmo.luminosity_distance(z_true).to(u.Gpc).value
-
-                # apply Gaussian noise to SNR
-                snr_obs = snr + np.random.normal(loc=0, scale=1)
-
-                # get the snr-weighted sigma for the detector-frame chirp mass, and draw samples
-                mc_sigma = _snrscale_sigmas['mchirp']*self.snr_thresh / snr_obs
-                if observation_noise==True:
-                    mcdet_obs = float(10**(np.log10(mcdet_true) + norm.rvs(loc=0, scale=mc_sigma, size=1)))
-                else:
-                    mcdet_obs = mcdet_true
-                mcdet_samps = 10**(np.log10(mcdet_obs) + norm.rvs(loc=0, scale=mc_sigma, size=Nsamps))
-
-                # get the snr-weighted sigma for eta, and draw samples
-                eta_sigma = _snrscale_sigmas['eta']*self.snr_thresh / snr_obs
-                if observation_noise==True:
-                    eta_obs = float(truncnorm.rvs(a=(0-eta_true)/eta_sigma, b=(0.25-eta_true)/eta_sigma, loc=eta_true, scale=eta_sigma, size=1))
-                else:
-                    eta_obs = eta_true
-                eta_samps = truncnorm.rvs(a=(0-eta_obs)/eta_sigma, b=(0.25-eta_obs)/eta_sigma, loc=eta_obs, scale=eta_sigma, size=Nsamps)
-
-                # get samples for projection factor (use the true value as the observed value)
-                # Note that our Theta is the projection factor (between 0 and 1), rather than the Theta from Finn & Chernoff 1993
-                snr_opt = snr/Theta
-                Theta_sigma = 0.3 / (1.0 + snr_opt/self.snr_thresh)
-                Theta_samps = truncnorm.rvs(a=(0-Theta)/Theta_sigma, b=(1-Theta)/Theta_sigma, loc=Theta, scale=Theta_sigma, size=Nsamps)
-
-                # get luminosity distance and redshift observed samples
-                dL_samps = dL_true * (Theta_samps/Theta)
-                z_samps = np.asarray([z_at_value(cosmo.luminosity_distance, d) for d in dL_samps*u.Gpc])
-
-                # get source-frame chirp mass and other mass parameters
-                mc_samps = mcdet_samps / (1+z_samps)
-                q_samps = eta_to_q(eta_samps)
-                m1_samps, m2_samps = mchirpq_to_m1m2(mc_samps,q_samps)
-                mtot_samps = (m1_samps + m2_samps)
-
-                for pidx, param in enumerate(params):
-                    if param=='mchirp':
-                        obsdata[idx, :, pidx] = mc_samps
-                    elif param=='mtot':
-                        obsdata[idx, :, pidx] = mtot_samps
-                    elif param=='q':
-                        obsdata[idx, :, pidx] = q_samps
-                    elif param=='eta':
-                        obsdata[idx, :, pidx] = eta_samps
-                    elif param=='chieff':
-                        chieff_true = obs[params.index('chieff')]
-                        chieff_sigma = _snrscale_sigmas['chieff']*self.snr_thresh / snr_obs
-                        if observation_noise==True:
-                            chieff_obs = float(truncnorm.rvs(a=(-1-chieff_true)/chieff_sigma, b=(1-chieff_true)/chieff_sigma, loc=chieff_true, scale=chieff_sigma, size=1))
-                        else:
-                            chieff_obs = chieff_true
-                        chieff_samps = truncnorm.rvs(a=(-1-chieff_obs)/chieff_sigma, b=(1-chieff_obs)/chieff_sigma, loc=chieff_obs, scale=chieff_sigma, size=Nsamps)
-                        obsdata[idx, :, pidx] = chieff_samps
-                    elif param=='z':
-                        obsdata[idx, :, pidx] = z_samps
-
-        return obsdata
-    """
