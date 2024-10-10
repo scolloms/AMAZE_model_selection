@@ -148,12 +148,9 @@ def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitiv
     #Flow case: reads in samples from all channels and sends to FlowModel
     if use_flows==True:
         flow_models = {}
-        no_bins = kwargs['no_bins']
-        if len(no_bins) != len(channels):
-            raise ValueError('The number of bins specified does not match the shape of the number of channels')
         for i, chnl in enumerate(tqdm(channels)):
             popsynth_outputs = read_hdf5(file_path, chnl)
-            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, detectable=detectable, no_bins=int(no_bins[i]))
+            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity)
         return deepest_models, flow_models
     else:
         kde_models = {}
