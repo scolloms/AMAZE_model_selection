@@ -34,6 +34,7 @@ argp = argparse.ArgumentParser()
 argp.add_argument("--file-path", type=str, required=True, help="Path to where the population models are living. Models should be stored in hdf5 format, with the channel as the base group, and model parameters as subgroups (e.g., 'CE/chi01/alpha0.5').")
 argp.add_argument("--model0", type=str, required=True, help="Sets the 'true' model from which mock observations are drawn. When there are multiple parameters in the submodel, separate with '/' (e.g., 'chi00/alpha5'). If 'gwobs', will use the actual GW observations.")
 argp.add_argument("--use-flows", action="store_true", help="True if using normalising flows to estimate hyperlikelihoods in inference. Otherwise use KDEs. Default=False.")
+argp.add_argument("--discrete-sample", action="store_true", help="If true then sample on hyperparameter indices to just evaluate likelihood at locations of training models. Set to True is useflows is False. Default=False.")
 argp.add_argument("--gw-path", type=str, help="Sets the path for where the GW samples are living. Necessary if model0='gwobs'. Default=None.")
 argp.add_argument("--prior", type=str, help="Sets the key for the prior weights of each GW sample. This is used to calculate p(theta), which we use to divide out the prior in the heirarchical inference. Default=None.")
 argp.add_argument("--channels", nargs="+", default=['CE', 'CHE', 'GC', 'NSC', 'SMT'], help="Specifies the formation channels you wish to consider in the inference. If gwobs not being used, must have the same length as the number of betas provided. Note that the order of betas will be interpretted in the same order as channels. Default=['CE', 'CHE', 'GC', 'NSC', 'SMT'].")
@@ -80,59 +81,63 @@ else:
 verbose=args.verbose
 make_plots=args.make_plots
 use_flows=args.use_flows
+discrete_sample=args.discrete_sample
 use_wandb=args.use_wandb
 lr = np.array(args.lr, dtype=float)
 print_file = open(f"outdir/output_seed{args.random_seed}.txt", "a")
 
-# check that use flows is True or False
+# Check whether to use normalising flows or KDEs for inference, and if using KDEs set discrete inference to True
 if use_flows==True:
     if verbose:
-        print_both(print_file, 'Using Normalising Flows for inference.')
-elif use_flows==False:
+        if discrete_sample:
+            print_both(print_file, 'Using Normalising Flows for discrete inference.')
+        else:
+            print_both(print_file, 'Using Normalising Flows for continuous inference.')
+else:
+    if discrete_sample==False:
+        warnings.warn('Cannot use KDEs for continuous inference. Switching to discrete inference.')
+        discrete_sample=True
     if verbose:
         print_both(print_file, 'Using KDEs for inference.')
-else:
-    warnings.warn('Construction of the hyperlikelihood function not defined. Please specify the use_flows argument.')
 
 #sets up uniform regularisation constant N
 if args.regularisation_N == None:
-    use_reg=False
     smallest_N = None
 else:
-    use_reg=True
     smallest_N = int(args.regularisation_N)
 
 
 # see if we're using GW observations
 gwobs = True if args.model0=='gwobs' else False
 
-# --- Useful functions for accessing items in dictionary
+# --- Useful functions for accessing items in KDE dictionary
 def getFromDict(dataDict, mapList):
     return reduce(operator.getitem, mapList, dataDict)
 def setInDict(dataDict, mapList, value):
     getFromDict(dataDict, mapList[:-1])[mapList[-1]] = value
 
-# --- Load in models/kdemodels into dict structure: models[model][channel]
+# --- Load in population models into dictionary structure: models[channel] for flows and models[channel][model] for KDEs
+
 # Construct both "underlying" KDE models (anything that has Pdet>0) and "detectable" KDE models
 # `normalize` argument normalizes KDEs on unit cube
+
+# Flow models do not support learning the detectable distribution
+
 params = list(np.asarray(args.params).flatten())
 if use_flows==True:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, detectable=False,\
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, detectable=False,\
         device=args.device, no_bins=args.spline_bins)
-    #TO CHANGE - add detectable models?
-    model_names.sort()
-    hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
-    Nhyper = np.max([len(x.split('/')) for x in hyperparams])
 else:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying KDEs...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, use_unityweights=args.use_unityweights)
-    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows=use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=True, use_unityweights=args.use_unityweights)
-    model_names.sort()
-    hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
-    Nhyper = np.max([len(x.split('/')) for x in hyperparams])
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, use_unityweights=args.use_unityweights)
+    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=True, use_unityweights=args.use_unityweights)
+
+model_names.sort()
+hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
+Nhyper = np.max([len(x.split('/')) for x in hyperparams])
 
 
 # check that betas are provided if gwobs not specified, check betas, and sort channels and betas consistently
@@ -153,6 +158,7 @@ if not gwobs:
         betas.append(1.0 - np.sum(betas))
     # sort betas in alphabetical order of channels
     betas = [x for _,x in sorted(zip(channels,betas))]
+
 # sort channels in alphabetical order
 channels = sorted(list(pop_models.keys()))
 
@@ -316,34 +322,13 @@ else:
     # assume equal prior weight for each posterior sample
     p_theta = np.ones((obsdata.shape[0],obsdata.shape[1]))
 
-# plot for paper (uncomment if generating)
-#print_both(print_file, "\nPlotting marginalized KDE models...")
-#from plot import plot_for_paper
-#observations, obsdata, p_theta, events = gw_obs.generate_observations(params, args.gw_path, args.Nsamps, 'delta')
-#fixed_vals = ['alpha10']
-#plot_for_paper.plot_1D_kdemodels(model_names, kde_models_detectable, params, observations, obsdata, events, model0, name=args.name, fixed_vals=fixed_vals, plot_obs=True, plot_obs_samples=False)
-#exit()
 
-#TO CHANGE LATER - need to add function in msplot potentially for plotting 1D samples from flows
-# Plot the KDEs and observations
-"""if make_plots==True:
-    if verbose==True:
-        print_both(print_file, "\nPlotting marginalized KDE models...")
-    if len(args.model0.split('/'))>1:
-        fixed_vals = [args.model0.split('/')[-1]]
-    else:
-        fixed_vals = ['alpha10']
-    msplot.plot_1D_kdemodels(model_names, pop_models_detectable, params, observations, obsdata, \
-           model0, name=args.name, fixed_vals=fixed_vals, plot_obs=True, plot_obs_samples=False)
-    if verbose:
-        print_both(print_file, "")"""
-
-
-# --- Freeze sample evaluations in each model. 
+# --- Prepare population models
+# If using Flows, train or load a previously trained model for each formation channel
+# If using KDEs, freeze sample evaluations in each model. 
 # This is time consuming, but only needs to be done once for each KDE model, 
 # so we don't need to recompute p_model(data) over and over again when the 
-# observation values aren't going to change. 
-# Lower the number of samples per observation to speed this up.
+# observation values aren't going to change.
 
 if use_flows==True:
     if verbose:
@@ -397,15 +382,16 @@ while all_models_at_deepest==False:
 
 
 # --- Do the sampling!
-sampler = sample.Sampler(model_names)
-sampler.sample(pop_models, obsdata, use_flows, smallest_N, prior_pdf=p_theta, verbose=verbose)
+sampler = sample.Sampler(model_names, hyperparam_bounds=[[0, len(hyperparam_dict[0])], [0, len(hyperparam_dict[1])]])
+sampler.sample(pop_models, obsdata, use_flows, smallest_N, discrete_sample, prior_pdf=p_theta, verbose=verbose)
 samples = sampler.samples
 lnprb = sampler.lnprb
 submodels_dict = sampler.submodels_dict
 
 # take the floor of the hyperparameters to get the model indices
-#for hyper_idx in list(submodels_dict.keys()):
-#    samples[:,:,hyper_idx] = np.floor(samples[:,:,hyper_idx]).astype(int)
+if discrete_sample:
+    for hyper_idx in list(submodels_dict.keys()):
+        samples[:,:,hyper_idx] = np.floor(samples[:,:,hyper_idx]).astype(int)
 
 
 # Reshape to have all steps from all walkers in a single dimension

@@ -51,7 +51,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, flow_path, sensitivity, device='cpu'):
+    def from_samples(channel, samples, params, flow_path, sensitivity, device):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -60,7 +60,7 @@ class FlowModel(Model):
         is provided, samples used to generate the detection-weighted KDE will be 
         weighted according to the key in the argument `pdet_*sensitivity*`.
 
-        Inputs
+        Parameters
         ----------
         channel : str
             channel label of form 'CE'
@@ -74,13 +74,12 @@ class FlowModel(Model):
             Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
             to calculate the detection efficiency
         deivce : str
-            Device on which to run the flow. default is 'cpu', otherwise choose 'cuda:X' where X is the GPU slot.
+            Device on which to run the flow. Either is 'cpu', otherwise choose 'cuda:X' where X is the GPU slot.
         
         Returns
         ----------
         FlowModel : obj
         """
-
         return FlowModel(channel, samples, params, flow_path, sensitivity, device=device)
 
 
@@ -264,18 +263,24 @@ class FlowModel(Model):
         if self.channel_label != 'CE':
             #Channels with 1D hyperparameters: SMT, GC, NSC, CHE
 
-            #put samples from binary parameters for all chi_bs into model_stack
-            models = np.zeros((self.no_binaries, self.no_params))
-            weights = np.zeros((self.no_binaries))
+
+            #measure no_samples in models
             model_size = np.zeros(self.no_params)
             cumulsize = np.zeros(self.no_params)
-
-            #moves binary parameter samples and weights from dictionaries into arrays, reducing dimension in hyperparameter space
+            
             for chib_id, xb in enumerate(self.hps[0]):
                 model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
                 cumulsize[chib_id] = np.sum(model_size)
+
+            self.no_binaries = cumulsize[-1]
+            models = np.zeros((self.no_binaries, self.no_params))
+            weights = np.zeros((self.no_binaries))
+
+            #moves binary parameter samples and weights from dictionaries into array
+            for chib_id, xb in enumerate(self.hps[0]):
                 models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
                 weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
+
             models_stack = np.copy(models)
 
             #map samples before dividing into training and validation data
@@ -304,25 +309,22 @@ class FlowModel(Model):
             #put data from required parameters for all alphas and chi_bs into model_stack
 
             if testCEsmdl:
-                self.no_binaries = self.no_binaries - 996688
                 test_model_id = [1,2]
                 test_model_id_flat = 7
                 self.total_hps = self.total_hps - 1
 
-            models = np.zeros((self.no_binaries, self.no_params))
-            weights = np.zeros((self.no_binaries,1))
 
             model_size = np.zeros((4,5))
             cumulsize = np.zeros(self.total_hps)
 
             #format which chi_bs and alphas match which parameter values being read in
-            chi_b_alpha_pairs= np.zeros((20, 2))
+            chi_b_alpha_pairs= np.zeros((self.total_hps, 2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(np.log(self.hps[1]), np.shape(self.hps[0])[0])
             if testCEsmdl:
                 chi_b_alpha_pairs = np.delete(chi_b_alpha_pairs, test_model_id_flat, axis=0)
 
-            #stack data
+            #meaure no samples in each population, and the cumulative samples in each population used for training
             i=0
             for chib_id in range(4):
                 for alpha_id in range(5):
@@ -334,6 +336,17 @@ class FlowModel(Model):
                     model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
                     cumulsize[i] = np.sum(model_size)
 
+            self.no_binaries = cumulsize[-1]
+            models = np.zeros((self.no_binaries, self.no_params))
+            weights = np.zeros((self.no_binaries,1))
+
+            #put samples from each model into array of shape [no_samples in channel, no params]
+            i=0
+            for chib_id in range(4):
+                for alpha_id in range(5):
+                    if testCEsmdl:
+                        if [chib_id, alpha_id] == test_model_id:
+                            continue
                     models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
                     weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
                     i+=1
@@ -344,30 +357,27 @@ class FlowModel(Model):
 
             all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
 
-            #reshaping popsynth samples into array of shape [Nsmdls,Nbinaries,Nparams]
-            joined_chib_samples = models
+            models_stack = np.copy(models)
 
-            #map samples before dividing into training and validation data
-
-            #TO CHANGE - needs to account for different sets of parameters
+            #scale parameters with logistic mapping, only for full range of parameters
             #chirp mass original range 0 to inf
-            joined_chib_samples[:,0], max_logit_mchirp, max_mchirp = self.logistic(joined_chib_samples[:,0], wholedataset=True, \
+            models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
 
             #mass ratio - original range 0 to 1
-            joined_chib_samples[:,1], max_logit_q, max_q = self.logistic(joined_chib_samples[:,1], wholedataset=True, \
+            models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1], wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
 
             #chieff - original range -1 to +1
-            joined_chib_samples[:,2] = np.arctanh(joined_chib_samples[:,2])
+            models_stack[:,2] = np.arctanh(models_stack[:,2])
 
             #redshift - original range 0 to inf
-            joined_chib_samples[:,3], max_logit_z, max_z = self.logistic(joined_chib_samples[:,3],wholedataset=True, \
+            models_stack[:,3], max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
                 rescale_max=self.param_bounds[3][1])
 
             weights = np.reshape(weights,(-1,1))
             train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
-                    train_test_split(joined_chib_samples, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
+                    train_test_split(models, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
 
         #concatenate data and weights and hyperparams
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
@@ -379,10 +389,20 @@ class FlowModel(Model):
         
         return(training_data, val_data, mappings)
 
-    #TO CHANGE - for fake observations. 
     def sample(self, conditional, N=1):
         """
         Samples Flow
+
+        Parameters
+        ----------
+        conditional : array of length self.conditionals
+            the values of the model hyperparameters for the sampled channel (e.g. [chi_b,alpha_CE])
+        N : int
+            number of samples to draw
+        Returns
+        ----------
+        samps : array
+            samples in shape [N, no_params]
         """
         #log alphaCE
         if self.channel_label =='CE':
@@ -408,7 +428,7 @@ class FlowModel(Model):
         data : array
             posterior samples of observations or mock observations for which to calculate the likelihoods,
             shape[Nobs x Nsample x Nparams]
-        conditional_hp_idxs : array
+        conditional_hps : array
             values of hyperparameters for require submodel, of shape [self.conditionals]
         prior_pdf : array
             p(x) prior on the data
@@ -435,9 +455,7 @@ class FlowModel(Model):
 
         #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
 
-        if self.channel_label =='CE':
-            conditional_hps[1] = np.log(conditional_hps[1])
-        conditional_hps = np.asarray(conditional_hps)
+        conditional_hps = np.asarray(conditional_hps) #alphaCE still needs to be logged if continuous sampling
         conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
@@ -577,7 +595,7 @@ class FlowModel(Model):
 
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
         if self.channel_label == "CE":
-            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
+            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
             alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
         else:

@@ -106,7 +106,7 @@ posteriors!".format(self.posterior_name))
         self.hyperparam_bounds = kwargs['hyperparam_bounds'] if 'hyperparam_bounds' in kwargs else _hyperparam_bounds
 
     #still input flow dictionary
-    def sample(self, pop_models, obsdata, use_flows, smallest_N, prior_pdf, verbose=True):
+    def sample(self, pop_models, obsdata, use_flows, smallest_N, discrete_sample, prior_pdf, verbose=True):
         """
         Initialize and run the sampler
         """
@@ -116,16 +116,21 @@ posteriors!".format(self.posterior_name))
         p0 = np.empty(shape=(self.nwalkers, self.ndim))
 
         # first, for the population hyperparameters
-        #selects points in uniform prior for hyperparams chi_b, and loguniform in alpha
+        #selects points in uniform prior for chi_b
         p0[:,0] = np.random.uniform(self.hyperparam_bounds[0][0], self.hyperparam_bounds[0][1], size=self.nwalkers)
-        p0[:,1] = loguniform.rvs(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
+        #select log uniform in alphaCE (uniform over alphaCE indices, or loguniform in alphaCE values)
+        if discrete_sample:
+            len(self.submodels_dict[idx])
+            p0[:,1] = np.random.uniform(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
+        else:
+            p0[:,1] = loguniform.rvs(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
         # second, for the branching fractions (we have Nchannel-1 betasin the inference because of the implicit constraint that Sum(betas) = 1
         _concentration = np.ones(len(self.channels))
         beta_p0 =  dirichlet.rvs(_concentration, p0.shape[0])
         p0[:,self.Nhyper:] = beta_p0[:,:-1]
 
         # --- Do the sampling
-        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, smallest_N, prior_pdf, self.hyperparam_bounds] #these are arguments to pass to self.posterior
+        posterior_args = [obsdata, pop_models, self.submodels_dict, self.channels, _concentration, use_flows, smallest_N, prior_pdf, self.hyperparam_bounds, discrete_sample] #these are arguments to pass to self.posterior
         if verbose:
             print("Sampling...")
         sampler = self.sampler(self.nwalkers, self.ndim, self.posterior, args=posterior_args) #calls emcee sampler with self.posterior as probability function
@@ -156,7 +161,7 @@ posteriors!".format(self.posterior_name))
 
 # --- Define the likelihood and prior
 
-def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
+def lnp(x, submodels_dict, _concentration, hyperparam_bounds, discrete_sample):
     """
     Log of the prior. 
     Returns logL of -inf for points outside, uniform within. 
@@ -176,11 +181,16 @@ def lnp(x, submodels_dict, _concentration, hyperparam_bounds):
     if np.sum(betas_tmp) != 1.0:
         return -np.inf
 
+    if discrete_sample:
+        alpha_CE_prior = 0
+    else:
+        alpha_CE_prior = loguniform.logpdf(x[1],a=hyperparam_bounds[1][0], b=hyperparam_bounds[1][1])
+
     # Dirchlet distribution prior for betas, plus uniform prior on log(alphaCE)
-    return dirichlet.logpdf(betas_tmp, _concentration) + loguniform.logpdf(x[1],a=hyperparam_bounds[1][0], b=hyperparam_bounds[1][1])
+    return dirichlet.logpdf(betas_tmp, _concentration) + alpha_CE_prior
 
 
-def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
+def lnlike_cont(x, data, pop_models, submodels_dict, channels, prior_pdf, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
     """
     Log of the likelihood. 
     Selects on model, then tests beta.
@@ -205,38 +215,75 @@ def lnlike(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, 
     # Detection effiency for this hypermodel
     alpha = 0
 
+    #find log of alpha_CE for finding likelihood
+    x[1] = np.log(x[1])
+
     # Iterate over channels in this submodel, return likelihood of population model
-    if use_flows==True:
-        for channel, beta in zip(channels, betas):
-            #get corresponding flow to channel
-            smdl = pop_models[channel]
-            #sum likelihood over channels, keep track of detection efficiency
-            if channel == 'CE':
-                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)], smallest_N, prior_pdf=prior_pdf)], axis=0)
-                alpha += beta * smdl.get_alpha([x[:len(submodels_dict)]])
-            else:
-                lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:len(submodels_dict)][0], smallest_N, prior_pdf=prior_pdf)], axis=0)
-                alpha += beta * smdl.get_alpha([x[:len(submodels_dict)][0], 1.])
-    else:
-        model_list = []
-        hyperparam_idxs = []
-        for hyper_idx in list(submodels_dict.keys()):
-            hyperparam_idxs.append(int(np.floor(x[hyper_idx])))
-            model_list.append(submodels_dict[hyper_idx][int(np.floor(x[hyper_idx]))]) #finds where walker is in hyperparam space
-
-        for channel, beta in zip(channels, betas):
-            model_list_tmp = model_list.copy()
-            model_list_tmp.insert(0,channel) #list with channel, 2 hypermodels (chi_b, alpha)
-
-            smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
-            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data, smallest_N))], axis=0)
-            alpha += beta * smdl.alpha
+    for channel, beta in zip(channels, betas):
+        #get corresponding flow to channel
+        smdl = pop_models[channel]
+        #sum likelihood over channels, keep track of detection efficiency
+        lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:smdl.conditionals], smallest_N, prior_pdf=prior_pdf)], axis=0)
+        alpha += beta * smdl.get_alpha([x[:smdl.conditionals]])
 
     #returns lnprob summed over events (probability multiplied over events, divided by detection efficiency)
     return (lnprob-np.log(alpha)).sum()
 
+def lnlike_disc(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N, **kwargs): #data here is obsdata previously, and x is the point in log hyperparam space
+    """
+    Log of the likelihood. 
+    Selects on model, then tests beta.
 
-def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_flows, smallest_N, prior_pdf, hyperparam_bounds):
+    x: array
+        current position of walker in parameter space of hyperparameter *indices*
+        shape [Nhyperparameters=2] even for channels with 1 hyperparameter
+    data: array
+        GW posterior samples or mock observations
+        [Nobs x Nsample x Nparams]
+    submodels_dict: dictionary
+        stores submodels to related to their index number by keys [0 or 1][0,1,2,3,4]
+        where first is either chi_b or alpha, and the other is hyperparameter value
+    """
+    model_list = []
+    hyperparam_idxs = []
+    for hyper_idx in list(submodels_dict.keys()):
+        hyperparam_idxs.append(int(np.floor(x[hyper_idx])))
+        model_list.append(submodels_dict[hyper_idx][int(np.floor(x[hyper_idx]))]) #finds where walker is in hyperparam space
+
+    # get betas
+    betas = np.asarray(x[len(submodels_dict):])
+    betas = np.append(betas, 1-np.sum(betas))
+
+    # Likelihood
+    lnprob = np.zeros(data.shape[0])-np.inf
+
+    # Detection effiency for this hypermodel
+    alpha = 0
+
+    # Iterate over channels in this submodel, return likelihood of population model
+    #can't vectorise over this unless its a numpy array of flows, which doesn't seem like the best coding practice
+    for channel, beta in zip(channels, betas):
+
+        model_list_tmp = model_list.copy()
+        model_list_tmp.insert(0,channel) #list with channel, 2 hypermodels (chi_b, alpha)
+        
+        #calls popModels to return likelihood of data given model and add contribution from this channel
+        if use_flows==True:
+            smdl = pop_models[channel]
+            #LSE over channels
+            #keep lnprob as shape [Nobs]
+            conditional_hps = [smdl.hps[i][hyperparam_idxs[i]] for i in range(smdl.conditionals)]
+            lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, conditional_hps, smallest_N, prior_pdf=prior_pdf)], axis=0)
+            alpha += beta * smdl.alpha[tuple([hyperparam_idxs[i] for i in range(smdl.conditionals)])]
+        else:
+            smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
+            lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data, smallest_N))], axis=0)
+            alpha += beta * smdl.alpha
+
+    #returns lnprob summed over events (probability multiplied over events - see one channel eq D13 for full likelihood calc)
+    return (lnprob-np.log(alpha)).sum()
+
+def lnpost(x, data, pop_models, submodels_dict, channels, _concentration, use_flows, smallest_N, prior_pdf, hyperparam_bounds, discrete_sample):
     """
     Combines the prior and likelihood to give a log posterior probability 
     at a given point
@@ -245,16 +292,19 @@ def lnpost(x, data, kde_models, submodels_dict, channels, _concentration, use_fl
         walker points in hyperparameters space to sample probability
     data : np array
         GW observations of shape [Nobs, Nsamps, Nparams]
-    kde_models : Dict
-        models of KDE probabilities
+    pop_models : Dict
+        population models represented by either KDEs or Flows
     """
     # Prior
-    log_prior = lnp(x, submodels_dict, _concentration, hyperparam_bounds)
+    log_prior = lnp(x, submodels_dict, _concentration, hyperparam_bounds, discrete_sample)
     if not np.isfinite(log_prior):
         return log_prior
 
     # Likelihood
-    log_like = lnlike(x, data, kde_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N)
+    if discrete_sample:
+        log_like = lnlike_disc(x, data, pop_models, submodels_dict, channels, prior_pdf, use_flows, smallest_N)
+    else:
+        log_like = lnlike_cont(x, data, pop_models, submodels_dict, channels, prior_pdf, smallest_N)
     
     return log_like + log_prior #evidence is divided out
 
