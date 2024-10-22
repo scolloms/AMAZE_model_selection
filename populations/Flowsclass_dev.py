@@ -198,15 +198,19 @@ class FlowModel(Model):
         if os.path.isfile(f'{flow_path}flowconfig.json'):
             with open(f'{flow_path}flowconfig.json', 'r') as f:
                 config = json.load(f)
+        else:
+            config = {}
+
+        if self.channel_label in list(config.keys()):
             self.no_trans = config[self.channel_label]['transforms']
             self.no_neurons = config[self.channel_label]['neurons']
-            no_bins = config[self.channel_label]['bins']
+            self.no_bins = config[self.channel_label]['bins']
         else:
             self.no_trans = 6
             self.no_neurons = 128
-            no_bins=4
+            self.no_bins=4
             if self.channel_label=='CE' or self.channel_label=='NSC':
-                no_bins=5
+                self.no_bins=5
 
         batch_size=10000
         self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
@@ -222,11 +226,11 @@ class FlowModel(Model):
 
         #initislises network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
-                    self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+                    self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         self.flow = flow
 
 
-    def map_samples(self, samples, params, filepath, testCEsmdl=True):
+    def map_samples(self, samples, params, filepath, testCEsmdl=False):
         """
         Maps samples with logistic mapping (mchirp, q, z samples) and tanh (chieff).
         Stacks data by [mchirp,q,chieff,z,weight,chi_b,(alpha)].
@@ -264,22 +268,26 @@ class FlowModel(Model):
             #Channels with 1D hyperparameters: SMT, GC, NSC, CHE
 
 
-            #measure no_samples in models
+            #measure no_samples in models and identify samples with weights below fmin
             model_size = np.zeros(self.no_params)
             cumulsize = np.zeros(self.no_params)
+            weights_idxs = []
             
             for chib_id, xb in enumerate(self.hps[0]):
-                model_size[chib_id] = np.shape(samples[(chib_id)][params])[0]
+                weights_temp=np.asarray(self.combined_weights[(chib_id)])
+                weights_idxs.append(np.argwhere((weights_temp) > np.finfo(np.float32).tiny))
+                model_size[chib_id] = np.shape(weights_idxs[chib_id])[0]
                 cumulsize[chib_id] = np.sum(model_size)
 
-            self.no_binaries = cumulsize[-1]
+            self.no_binaries = int(cumulsize[-1])
             models = np.zeros((self.no_binaries, self.no_params))
-            weights = np.zeros((self.no_binaries))
+            weights = np.zeros((self.no_binaries, 1))
+            cumulsize = np.append(cumulsize, 0)
 
             #moves binary parameter samples and weights from dictionaries into array
             for chib_id, xb in enumerate(self.hps[0]):
-                models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(samples[(chib_id)][params])
-                weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])
+                models[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.reshape(np.asarray(samples[(chib_id)][params])[weights_idxs[chib_id]],(-1,len(params)))
+                weights[int(cumulsize[chib_id-1]):int(cumulsize[chib_id])]=np.asarray(self.combined_weights[(chib_id)])[weights_idxs[chib_id]]
 
             models_stack = np.copy(models)
 
@@ -316,6 +324,7 @@ class FlowModel(Model):
 
             model_size = np.zeros((4,5))
             cumulsize = np.zeros(self.total_hps)
+            weights_idxs = []
 
             #format which chi_bs and alphas match which parameter values being read in
             chi_b_alpha_pairs= np.zeros((self.total_hps, 2))
@@ -332,13 +341,15 @@ class FlowModel(Model):
                         if [chib_id, alpha_id] == test_model_id:
                             continue
                     weights_temp=np.asarray(self.combined_weights[(chib_id, alpha_id)])
-                    weights_idxs = np.argwhere((weights_temp) > np.finfo(np.float32).tiny)
-                    model_size[chib_id, alpha_id] = np.shape(weights_idxs)[0]
+                    weights_idxs.append(np.argwhere((weights_temp) > np.finfo(np.float32).tiny))
+                    model_size[chib_id, alpha_id] = np.shape(weights_idxs[i])[0]
                     cumulsize[i] = np.sum(model_size)
+                    i+=1
 
-            self.no_binaries = cumulsize[-1]
+            self.no_binaries = int(cumulsize[-1])
             models = np.zeros((self.no_binaries, self.no_params))
             weights = np.zeros((self.no_binaries,1))
+            cumulsize = np.append(cumulsize, 0)
 
             #put samples from each model into array of shape [no_samples in channel, no params]
             i=0
@@ -347,8 +358,8 @@ class FlowModel(Model):
                     if testCEsmdl:
                         if [chib_id, alpha_id] == test_model_id:
                             continue
-                    models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs],(-1,len(params)))
-                    weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs],(-1,1))
+                    models[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(samples[(chib_id, alpha_id)][params])[weights_idxs[i]],(-1,len(params)))
+                    weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs[i]],(-1,1))
                     i+=1
 
             flat_model_size = np.reshape(model_size, 20)
@@ -557,10 +568,20 @@ class FlowModel(Model):
             data *=rescale_max
         return(data)
 
-    def train(self, no_trans, no_bins, no_neurons, lr, epochs, batch_no, filepath, channel, use_wandb):
+    def train(self, no_trans, no_bins, no_neurons, lr, epochs, batch_no, filepath, channel, use_wandb=False):
+
+        #write or append channel config to json file
+
         channel_config = {'transforms':no_trans, 'neurons':no_neurons,'bins':no_bins}
         channel_json = {}
         channel_json[self.channel_label] = channel_config
+
+        if os.path.isfile(f'{filepath}flowconfig.json'):
+            with open(f'{filepath}flowconfig.json', 'r') as f:
+                old_config = json.load(f)
+            old_config[self.channel_label] = channel_config
+            channel_json = old_config
+            
         with open(f'{filepath}flowconfig.json', 'w') as f:
             json.dump(channel_json, f)
 
@@ -575,13 +596,11 @@ class FlowModel(Model):
             with open(f'{filepath}flowconfig.json', 'r') as f:
                 config = json.load(f)
             self.no_neurons = config[self.channel_label]['neurons']
-            no_bins = config[self.channel_label]['bins']
+            self.no_bins = config[self.channel_label]['bins']
             batch_size=10000
 
-            print(self.channel_label, self.no_neurons)
-
             self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
-                self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=no_bins)
+                self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         
         #load in actual flow model, and mappings
         self.flow.load_model(f'{filepath}{channel}.pt')
@@ -595,9 +614,9 @@ class FlowModel(Model):
 
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
         if self.channel_label == "CE":
-            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],self.hps[1]), np.log(alpha_grid),\
+            alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
-            alpha = np.exp(alpha_interp([hyperparams[0], np.log(hyperparams[1])]))
+            alpha = np.exp(alpha_interp([hyperparams[0][0], hyperparams[0][1]]))
         else:
             alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
             bounds_error=False, method='pchip', fill_value=None)

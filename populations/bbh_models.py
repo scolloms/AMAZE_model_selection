@@ -150,7 +150,7 @@ def get_models(file_path, channels, params, use_flows, spin_distr=None, sensitiv
         flow_models = {}
         for i, chnl in enumerate(tqdm(channels)):
             popsynth_outputs = read_hdf5(file_path, chnl)
-            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity)
+            flow_models[chnl] = FlowModel.from_samples(chnl, popsynth_outputs, params, device=device, sensitivity=sensitivity, flow_path=kwargs['flow_path'])
         return deepest_models, flow_models
     else:
         kde_models = {}
