@@ -59,6 +59,8 @@ argp.add_argument("--train-flows", action="store_true", help="If true trains flo
 argp.add_argument("--lr", nargs="+", default=[0.001,0.001,0.001,0.001,0.001], help="Initial learning rate to train flow models. Default=0.001 for all channels apart from NSC channel lr=0.0001.")
 argp.add_argument("--epochs", nargs="+", default=[1000,500,500,500,500], help="Epochs to train flow models. Default=[1000,500,500,500,500].")
 argp.add_argument("--spline-bins", nargs="+", default=[4,4,4,4,4], help="Number of bins to use in Coupling Spline flows. List, must be same length as channels. Default=4.")
+argp.add_argument("--no-trans", nargs="+", default=[6,6,6,6,6], help="Number of transformations to train flows. List, must be same length as channels. Default=6.")
+argp.add_argument("--no-neurons", nargs="+", default=[128,128,128,128,128,128], help="Number of neurons to train flows. List, must be same length as channels. Default=128.")
 argp.add_argument("--batch-no", type=int, default='10', help="Number of batches to train flow models. Default=10.")
 argp.add_argument("--device", type=str, default='cpu', help="Device to run model select on. Default=cpu, otherwise choose cuda:X where X is the slot of the GPU.")
 argp.add_argument("--use-wandb", action="store_true", help="Whether or not to use Weights and biases to run a sweep over optimising parameters of the normalising flows.")
@@ -127,8 +129,8 @@ params = list(np.asarray(args.params).flatten())
 if use_flows==True:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, detectable=False,\
-        device=args.device, no_bins=args.spline_bins)
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, flow_path=args.flow_model_filename, spin_distr=args.spinmag, sensitivity=args.sensitivity, detectable=False,\
+        device=args.device)
 else:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying KDEs...\n")
@@ -338,7 +340,7 @@ if use_flows==True:
             if use_wandb == True:
                 pop_models[channel].wandb_init(int(args.epochs[i]))
             else:
-                pop_models[channel].train(lr[i], int(args.epochs[i]), args.batch_no, args.flow_model_filename, channel, use_wandb)
+                pop_models[channel].train(int(args.no_trans[i]), int(args.spline_bins[i]), int(args.no_neurons[i]), lr[i], int(args.epochs[i]), args.batch_no, args.flow_model_filename, channel, use_wandb)
         else:
             pop_models[channel].load_model(args.flow_model_filename, channel)
 else:
@@ -382,9 +384,13 @@ while all_models_at_deepest==False:
 
 
 # --- Do the sampling!
-sampler = sample.Sampler(model_names, hyperparam_bounds=[[0, len(hyperparam_dict[0])], [0, len(hyperparam_dict[1])]])
+if discrete_sample:
+    sampler = sample.Sampler(model_names, hyperparam_bounds=[[0, len(hyperparam_dict[0])], [0, len(hyperparam_dict[1])]], likelihood='emcee_lnlike_disc')
+else:
+    sampler = sample.Sampler(model_names)
 sampler.sample(pop_models, obsdata, use_flows, smallest_N, discrete_sample, prior_pdf=p_theta, verbose=verbose)
 samples = sampler.samples
+raw_samples = samples.copy()
 lnprb = sampler.lnprb
 submodels_dict = sampler.submodels_dict
 
@@ -397,6 +403,7 @@ if discrete_sample:
 # Reshape to have all steps from all walkers in a single dimension
 original_shape = samples.shape
 samples = samples.reshape((samples.shape[0] * samples.shape[1], samples.shape[2]))
+raw_samples = raw_samples.reshape((raw_samples.shape[0] * raw_samples.shape[1], raw_samples.shape[2]))
 lnprb = lnprb.reshape((lnprb.shape[0] * lnprb.shape[1]))
 
 """
@@ -551,6 +558,8 @@ if args.save_samples:
         columns.append('beta_'+channel)
     df = pd.DataFrame(samples, columns=columns).astype(convert_dict)
     df.to_hdf(fname, key='model_selection/samples')
+    df = pd.DataFrame(raw_samples, columns=columns).astype(convert_dict)
+    df.to_hdf(fname, key='model_selection/raw_samples')
 
     # save detectable samples as dataframe
     columns = []
