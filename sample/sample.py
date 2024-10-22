@@ -120,7 +120,6 @@ posteriors!".format(self.posterior_name))
         p0[:,0] = np.random.uniform(self.hyperparam_bounds[0][0], self.hyperparam_bounds[0][1], size=self.nwalkers)
         #select log uniform in alphaCE (uniform over alphaCE indices, or loguniform in alphaCE values)
         if discrete_sample:
-            len(self.submodels_dict[idx])
             p0[:,1] = np.random.uniform(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
         else:
             p0[:,1] = loguniform.rvs(self.hyperparam_bounds[1][0], self.hyperparam_bounds[1][1], size=self.nwalkers)
@@ -216,15 +215,16 @@ def lnlike_cont(x, data, pop_models, submodels_dict, channels, prior_pdf, smalle
     alpha = 0
 
     #find log of alpha_CE for finding likelihood
-    x[1] = np.log(x[1])
+    model_hyperparams = [x[0],np.log(x[1])]
+    print(x)
 
     # Iterate over channels in this submodel, return likelihood of population model
     for channel, beta in zip(channels, betas):
         #get corresponding flow to channel
         smdl = pop_models[channel]
         #sum likelihood over channels, keep track of detection efficiency
-        lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, x[:smdl.conditionals], smallest_N, prior_pdf=prior_pdf)], axis=0)
-        alpha += beta * smdl.get_alpha([x[:smdl.conditionals]])
+        lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, model_hyperparams[:smdl.conditionals], smallest_N, prior_pdf=prior_pdf)], axis=0)
+        alpha += beta * smdl.get_alpha([model_hyperparams[:smdl.conditionals]])
 
     #returns lnprob summed over events (probability multiplied over events, divided by detection efficiency)
     return (lnprob-np.log(alpha)).sum()
@@ -273,8 +273,14 @@ def lnlike_disc(x, data, pop_models, submodels_dict, channels, prior_pdf, use_fl
             #LSE over channels
             #keep lnprob as shape [Nobs]
             conditional_hps = [smdl.hps[i][hyperparam_idxs[i]] for i in range(smdl.conditionals)]
+            if len(conditional_hps) >1:
+                conditional_hps = [conditional_hps[0],np.log(conditional_hps[1])]
             lnprob = logsumexp([lnprob, np.log(beta) + smdl(data, conditional_hps, smallest_N, prior_pdf=prior_pdf)], axis=0)
-            alpha += beta * smdl.alpha[tuple([hyperparam_idxs[i] for i in range(smdl.conditionals)])]
+            #for CE alpha dictionary key is tuple, but for non-CE, keys are ints
+            if channel == 'CE':
+                alpha += beta * smdl.alpha[tuple(hyperparam_idxs)]
+            else:
+                alpha += beta * smdl.alpha[hyperparam_idxs[0]]
         else:
             smdl = reduce(operator.getitem, model_list_tmp, pop_models) #grabs correct submodel
             lnprob = logsumexp([lnprob, np.log(beta) + np.log(smdl(data, smallest_N))], axis=0)
@@ -312,5 +318,5 @@ def lnpost(x, data, pop_models, submodels_dict, channels, _concentration, use_fl
 
 
 _valid_priors = {'emcee_lnp': lnp}
-_valid_likelihoods = {'emcee_lnlike': lnlike}
+_valid_likelihoods = {'emcee_lnlike': lnlike_cont, 'emcee_lnlike_disc': lnlike_disc}
 _valid_posteriors = {'emcee_lnpost': lnpost}
