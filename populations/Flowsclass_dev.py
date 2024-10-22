@@ -69,6 +69,8 @@ class FlowModel(Model):
             contains all binary parameters in 'params' array, cosmo_weights, pdet weights, optimal snrs
         params : list of str
             subset of mchirp, q, chieff, z
+        flow_path : str
+            directory of the flow models to load network config from if config file exists
         sensitivity : str
             Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
             Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
@@ -96,6 +98,8 @@ class FlowModel(Model):
             contains all binary parameters in 'params' array, cosmo_weights, pdet weights, optimal snrs
         params : list of str
             subset of [mchirp, q, chieff, z]
+        flow_path : str
+            directory of the flow models to load network config from if config file exists
         sensitivity : str
             Desired detector sensitivity consistent with the string following the `pdet` and `snropt` columns in the population dataframes.
             Used to construct a detection-weighted population model, as well as for drawing samples from the underlying population
@@ -179,13 +183,11 @@ class FlowModel(Model):
                     optimal_snrs[key] = np.nan*np.ones(len(sbml_samps))
 
 
-                # Combine the cosmological and detection weights
-                # detectable only used for plotting
+                # Normalise the cosmological weights. If wanted detection weighted samples, cosmo weigths could be combined with pdets
                 if (cosmo_weights[key] is not None):
                     combined_weights[key] = (cosmo_weights[key] / np.sum(cosmo_weights[key]))
                 else:
                     combined_weights[key] = np.ones(len(sbml_samps))
-                combined_weights[key] /= np.sum(combined_weights[key])
 
         #sets weights as class properties
         self.combined_weights = combined_weights
@@ -194,7 +196,7 @@ class FlowModel(Model):
         self.alpha = alpha
         self.cosmo_weights = cosmo_weights
         
-        #flow network parameters
+        #Load flow network parameters from config file if it exists
         if os.path.isfile(f'{flow_path}flowconfig.json'):
             with open(f'{flow_path}flowconfig.json', 'r') as f:
                 config = json.load(f)
@@ -213,18 +215,13 @@ class FlowModel(Model):
                 self.no_bins=5
 
         batch_size=10000
-        self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
 
+        #initialise the channel of this flow and how many training submodels exist for this channel
+        self.total_hps = np.shape(self.hps[0])[0]*np.shape(self.hps[1])[0]
         channel_ids = {'CE':0, 'CHE':1,'GC':2,'NSC':3, 'SMT':4}
         self.channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
 
-        #number of data points (total) for each channel
-        #no_binaries is total number of samples across sub-populations for non-CE channels, and no samples in each sub-population for CE channel
-        
-        channel_samples = [19912038,864124,896611,582961, 4e6]
-        self.no_binaries = int(channel_samples[self.channel_id])
-
-        #initislises network
+        #initislises flow network
         flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
                     self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         self.flow = flow
@@ -247,6 +244,8 @@ class FlowModel(Model):
             list of parameters to be used for inference, typically ['mchirp', 'q', 'chieff', 'z']
         filepath : str
             the filepath to the flow models and mappings to be loaded/saved
+        testCEsmdl : bool
+            Whether or not to remove the CE subpopulation (chi_b=0.1, alphaCE=1.0) as a test population before training.
         
         Returns
         -------
@@ -291,9 +290,13 @@ class FlowModel(Model):
 
             models_stack = np.copy(models)
 
-            #map samples before dividing into training and validation data
+            #map samples with logistic mapping before dividing into training and validation data
+
+            #mchirp
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0],wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
+
+            #q
             if self.channel_id == 2:
                 #add extra tiny amount to GC mass ratios as q=1 samples exist
                 models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
@@ -301,10 +304,16 @@ class FlowModel(Model):
             else:
                 models_stack[:,1], max_logit_q, max_q = self.logistic(models_stack[:,1],wholedataset=True, \
                 rescale_max=self.param_bounds[1][1])
+
+            #chieff
             models_stack[:,2] = np.arctanh(models_stack[:,2])
+
+            #z
             models_stack[:,3],max_logit_z, max_z = self.logistic(models_stack[:,3],wholedataset=True, \
                 rescale_max=self.param_bounds[3][1])
-
+            
+            #repeat subpopulation hyperparameter values no samples times for each subpopulation
+            #then split the training data, conditional data, and sample weights into training and validation sets
             training_hps_stack = np.repeat(self.hps[0], (model_size).astype(int), axis=0)
             training_hps_stack = np.reshape(training_hps_stack,(-1,self.conditionals))
             weights = np.reshape(weights,(-1,1))
@@ -314,19 +323,18 @@ class FlowModel(Model):
         else:
             #CE channel with alpha_CE parameter
 
-            #put data from required parameters for all alphas and chi_bs into model_stack
-
+            #sets test population to remove, test_model_id is the model indices of the removed population
             if testCEsmdl:
                 test_model_id = [1,2]
                 test_model_id_flat = 7
                 self.total_hps = self.total_hps - 1
 
-
+            #initialise arrays for model size
             model_size = np.zeros((4,5))
             cumulsize = np.zeros(self.total_hps)
             weights_idxs = []
 
-            #format which chi_bs and alphas match which parameter values being read in
+            #tile list of chi_bs and alpha_CEs into liost for each training sub-population
             chi_b_alpha_pairs= np.zeros((self.total_hps, 2))
             chi_b_alpha_pairs[:,0] = np.repeat(self.hps[0],np.shape(self.hps[1])[0])
             chi_b_alpha_pairs[:,1] = np.tile(np.log(self.hps[1]), np.shape(self.hps[0])[0])
@@ -352,6 +360,7 @@ class FlowModel(Model):
             cumulsize = np.append(cumulsize, 0)
 
             #put samples from each model into array of shape [no_samples in channel, no params]
+            #and weights into array [no_samples in channel, 1]
             i=0
             for chib_id in range(4):
                 for alpha_id in range(5):
@@ -362,15 +371,18 @@ class FlowModel(Model):
                     weights[int(cumulsize[i-1]):int(cumulsize[i])]=np.reshape(np.asarray(self.combined_weights[(chib_id, alpha_id)])[weights_idxs[i]],(-1,1))
                     i+=1
 
+            #reshape the model size array to be 1D
             flat_model_size = np.reshape(model_size, 20)
             if testCEsmdl:
                 flat_model_size = np.delete(flat_model_size, test_model_id_flat)
 
+            #repeat the pairs of [chi_b, alphaCE] for the number of samples in the training samples
             all_chi_b_alphas = np.repeat(chi_b_alpha_pairs, (flat_model_size).astype(int), axis=0)
 
-            models_stack = np.copy(models)
 
             #scale parameters with logistic mapping, only for full range of parameters
+            models_stack = np.copy(models)
+
             #chirp mass original range 0 to inf
             models_stack[:,0], max_logit_mchirp, max_mchirp = self.logistic(models_stack[:,0], wholedataset=True, \
                 rescale_max=self.param_bounds[0][1])
@@ -394,7 +406,7 @@ class FlowModel(Model):
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
         val_data = np.concatenate((validation_models_stack, validation_weights, validation_hps_stack), axis=1)
 
-        #save mapping constants
+        #save mapping constants in flow model directory
         mappings = np.asarray([max_logit_mchirp, max_mchirp, max_logit_q, max_q, max_logit_z, max_z])
         np.save(f'{filepath}{self.channel_label}_mappings.npy',mappings)
         
@@ -418,7 +430,8 @@ class FlowModel(Model):
         #log alphaCE
         if self.channel_label =='CE':
             conditional[1] = np.log(conditional[1])
-
+        
+        #sample from flow - this returns samples in the logistically mapped space
         logit_samps = self.flow.sample(conditional,N)
 
         #map samples back from logit space
@@ -441,6 +454,9 @@ class FlowModel(Model):
             shape[Nobs x Nsample x Nparams]
         conditional_hps : array
             values of hyperparameters for require submodel, of shape [self.conditionals]
+        smallest_N : int
+            the constant by which to add a regularisation factor, in order to give an approximately constant 
+            probability in the distribution tails of 1/smallest_N
         prior_pdf : array
             p(x) prior on the data
             If prior_pdf is None, each observation is expected to have equal
@@ -458,6 +474,7 @@ class FlowModel(Model):
 
         #set equal prior for all samples if prior is not specified
         prior_pdf = prior_pdf if prior_pdf is not None else np.ones((data.shape[0],data.shape[1]))
+        #raise error if any samples have prior=0
         if np.any(prior_pdf == 0.):
             raise Exception('One or more of the prior samples is equal to zero')
 
@@ -465,8 +482,7 @@ class FlowModel(Model):
         mapped_obs = self.map_obs(data)
 
         #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
-
-        conditional_hps = np.asarray(conditional_hps) #alphaCE still needs to be logged if continuous sampling
+        conditional_hps = np.asarray(conditional_hps)
         conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
         conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
 
@@ -479,8 +495,9 @@ class FlowModel(Model):
             q_weight = np.log(smallest_N/(smallest_N+1))
             likelihoods_per_samp = logsumexp([q_weight + likelihoods_per_samp, pi_reg*np.ones(likelihoods_per_samp.shape)], axis=0)
 
-
+        #divide by the prior on the data samples
         likelihoods_per_samp = likelihoods_per_samp - np.log(prior_pdf)
+
         #checks for nans in likelihood
         if np.any(np.isnan(likelihoods_per_samp)):
             raise Exception('Obs data is outside of range of samples for channel - cannot logistic map.')
@@ -492,7 +509,21 @@ class FlowModel(Model):
         return likelihood
 
     def get_latent_samps(self, samps, conditional):
+        """
+        Maps data into latent space of flow, return samples in latent space
 
+        Parameters
+        ----------
+        samps : array of shape [Nobs, Nsamps, Nparams]
+        conditional : array of length self.conditionals
+            the values of the model hyperparameters for the sampled channel (e.g. [chi_b,alpha_CE])
+
+        Returns
+        ----------
+        samps mapped to latent space
+        """
+
+        #logs alphaCE
         conditional = np.asarray(conditional)
         if self.channel_label =='CE':
             conditional[1] = np.log(conditional[1])
@@ -521,12 +552,13 @@ class FlowModel(Model):
         mapped_data : array
             observational binary parameters logistically mapped
 
-        TO CHANGE - account for different subsets of parameters.
+        Only accounts for full set of parameters [mchirp, q, chieff, z].
         mappings in form [max_logit_mchirp, max_mchirp, max_q, None, max_logit_z, max_z]
 
         """
         mapped_data = np.zeros((np.shape(data)[0],np.shape(data)[1],np.shape(data)[2]))
 
+        #compute logistic mappings of data
         mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
         mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
         mapped_data[:,:,2]= np.arctanh(data[:,:,2])
@@ -540,6 +572,27 @@ class FlowModel(Model):
         Logistically maps sample in non-logistsic space
         input is [Nsamps] shape array
         if the whole training set is passed to the function, this determines the maximum rescaling values
+
+        Parameters
+        -------
+        data : array 
+            posterior samples of observations or mock observations for which to map,
+            shape[Nobs x Nsample]
+        wholedataset : bool
+            whether or not the mapping is of the whole data set, in which case, after the logit transform, divide the samples by the max of logit(data).
+            if false, divide data by max
+        max : float
+        rescale_max : float
+            initial value by which to normalise the data by such that it lies on a range of 0-1 before the logistic mapping
+
+        Returns
+        -------
+        logit_data : array
+            scaled and logistically mapped samples of data
+        max : float
+            the value used to scale the data after the logistic mapping
+        rescale_max : float
+            the value used to normalise the data intially to be on a range from 0 to 1
         """
 
         #rescales samples so that they lie between 0 to 1, according to the upper bound of the parameter space
@@ -559,39 +612,97 @@ class FlowModel(Model):
         else:
             max = max
         logit_data /= max
+
         return([logit_data, max, rescale_max])
 
     def expistic(self, data, max, rescale_max=None):
+        """
+        Undoes the logistic transform on logistically mapped data
+
+        Parameters
+        -------
+        data : array
+            scaled and logistically mapped samples of data, shape [Nobs, Nsamps]
+        max : float
+            the value used to scale the data after the logistic mapping
+        rescale_max : float
+            the value used to normalise the data intially to be on a range from 0 to 1
+
+        Returns
+        -------
+        data : array 
+            posterior samples of observations or mock observations for which to unmap,
+            shape[Nobs x Nsample]
+        """
+        #times by scaling used to reduce spread of logistically mapped data
         data*=max
+
+        #expit the logistic data
         data = expit(data)
+
+        #times by the initial scaling to rescale the data to its original range
         if rescale_max != None:
             data *=rescale_max
         return(data)
 
-    def train(self, no_trans, no_bins, no_neurons, lr, epochs, batch_no, filepath, channel, use_wandb=False):
+    def train(self, no_trans, no_bins, no_neurons, lr, epochs, batch_no, filepath, use_wandb=False):
+        """
+        Trains the normalising flow with certain configuration of flow network parameters.
+        Saves these network parameters to a json config file, and saves flow post training
+
+        Parameters
+        -------
+        no_trans : int
+            number of transformations that the flow uses to map the data to the latent space
+        no_bins : int
+            number of spline bins for each transformation with the spline flow
+        no_neurons : int
+            number of neurons each layer of the neural network gets
+        lr : float
+            the initial learning rate of the flow
+        epochs : int
+            the number of epochs which to train the flow
+        batch_no : int
+            the number of samples to use for a batch of training
+        filepath : str
+            the directory to save the flow models and associated config
+        use_wandb : bool
+            whether or not to use Weights and Biases network optimisation to train the flow and track its loss etc
+        """
 
         #write or append channel config to json file
-
         channel_config = {'transforms':no_trans, 'neurons':no_neurons,'bins':no_bins}
         channel_json = {}
         channel_json[self.channel_label] = channel_config
 
+        #check if config exists e.g. for other channels
         if os.path.isfile(f'{filepath}flowconfig.json'):
             with open(f'{filepath}flowconfig.json', 'r') as f:
                 old_config = json.load(f)
             old_config[self.channel_label] = channel_config
             channel_json = old_config
-            
+
+        #write this channels config to file
         with open(f'{filepath}flowconfig.json', 'w') as f:
             json.dump(channel_json, f)
 
+        #map the training samples etc 
         training_data, val_data, self.mappings = self.map_samples(self.samples, self.params, filepath)
-        save_filename = f'{filepath}{channel}'
+
+        save_filename = f'{filepath}{self.channel_label}'
+        #train the normalising flow
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
-    def load_model(self, filepath, channel, device='cuda:0'):
+    def load_model(self, filepath):
+        """
+        Loads the normalising flow into self.flow with configuration of flow network parameters from json file if it exists.
 
-        #load no. neurons and no. bins from config and reinitialise flow if config for flows exists
+        Parameters
+        -------
+        filepath : str
+            directory with saved flow model and config
+        """
+        #load no. transforms, no. neurons and no. bins from config and reinitialise flow if config for flows exists
         if os.path.isfile(f'{filepath}flowconfig.json'):
             with open(f'{filepath}flowconfig.json', 'r') as f:
                 config = json.load(f)
@@ -603,23 +714,41 @@ class FlowModel(Model):
                 self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         
         #load in actual flow model, and mappings
-        self.flow.load_model(f'{filepath}{channel}.pt')
-        self.mappings = np.load(f'{filepath}{channel}_mappings.npy', allow_pickle=True)
-        if self.channel_label == 'GC':
-            self.mappings[self.mappings==None] = 1.001
-        else:
-            self.mappings[self.mappings==None] = 1.
+        self.flow.load_model(f'{filepath}{self.channel_label}.pt')
+        self.mappings = np.load(f'{filepath}{self.channel_label}_mappings.npy', allow_pickle=True)
 
     def get_alpha(self, hyperparams):
+        """
+        Get the detection efficiency at certain values of chi_b, alpha_CE with pchip spline interpolation.
 
+        Parameters
+        -------
+        hyperparams : array
+            [chi_b] or [chi_b, log(alpha_CE)] depending on non-CE or CE channel
+        
+        Returns
+        -------
+        alpha : float
+            value of detection efficiency for specified [chi_b, {alpha_CE}]
+        """
+
+        #reshape detection efficiency values onto 2D array or shape len(chi_b), len(alpha_CE) if CE channel
+        #len(alpha_CE)=1 for non-CE channels
         alpha_grid = np.reshape(tuple(self.alpha.values()), (len(self.hps[0]),len(self.hps[1])))
+
+        #CE case with 2D interpolation
         if self.channel_label == "CE":
+            #initialise interpolator over chi_b, log(alpha_CE) to interolate log(detection efficiency)
             alpha_interp = sp.interpolate.RegularGridInterpolator((self.hps[0],np.log(self.hps[1])), np.log(alpha_grid),\
                 bounds_error=False, method='pchip', fill_value=None)
+            #find alpha at specified chi_b, log(alpha_CE)
             alpha = np.exp(alpha_interp([hyperparams[0][0], hyperparams[0][1]]))
+
         else:
+            #interpolate log alpha over chi_b values
             alpha_interp = sp.interpolate.RegularGridInterpolator([self.hps[0]], np.log(np.reshape(alpha_grid, len(self.hps[0]))),\
             bounds_error=False, method='pchip', fill_value=None)
+            #return alpha at specified chi_b
             alpha = np.exp(alpha_interp([hyperparams[0]]))
         return alpha
 
