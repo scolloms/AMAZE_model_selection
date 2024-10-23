@@ -27,7 +27,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, training_inputs, cond_inputs,
-                no_binaries, batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu"):
+                batch_size, total_hps, channel_label, RNVP=True, no_bins=4, device="cpu"):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -42,8 +42,6 @@ class NFlow():
             number of parameters in dataspace (binary parameters)
         cond_inputs : int
             number of conditional population hyperparameters
-        no_binaries : int
-            number of binaries in each population
         batch_size : int
             number of training + validation samples to use in each batch
         total_hps : int
@@ -56,7 +54,6 @@ class NFlow():
             number of bins to use for a spline flow
         """
         self.no_params = training_inputs
-        self.no_binaries = no_binaries
         self.batch_size = batch_size
 
         self.total_hps = total_hps

@@ -222,7 +222,7 @@ class FlowModel(Model):
         self.channel_id = channel_ids[self.channel_label] #will be 0, 1, 2, 3, or 4
 
         #initislises flow network
-        flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size, 
+        flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, batch_size, 
                     self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         self.flow = flow
 
@@ -400,7 +400,8 @@ class FlowModel(Model):
 
             weights = np.reshape(weights,(-1,1))
             train_models_stack, validation_models_stack, train_weights, validation_weights, training_hps_stack, validation_hps_stack = \
-                    train_test_split(models, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
+                    train_test_split(models_stack, weights, all_chi_b_alphas, shuffle=True, train_size=0.8)
+
 
         #concatenate data and weights and hyperparams
         training_data = np.concatenate((train_models_stack, train_weights, training_hps_stack), axis=1)
@@ -693,7 +694,7 @@ class FlowModel(Model):
         #train the normalising flow
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
-    def load_model(self, filepath):
+    def load_model(self, filepath, device='cpu'):
         """
         Loads the normalising flow into self.flow with configuration of flow network parameters from json file if it exists.
 
@@ -710,7 +711,7 @@ class FlowModel(Model):
             self.no_bins = config[self.channel_label]['bins']
             batch_size=10000
 
-            self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, self.no_binaries, batch_size,\
+            self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, batch_size,\
                 self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         
         #load in actual flow model, and mappings
