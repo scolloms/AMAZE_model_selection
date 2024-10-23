@@ -48,7 +48,7 @@ _Nsamps = 100000
 _channel_label =[r'$\beta_{\mathrm{CE}}$',r'$\beta_{\mathrm{CHE}}$',r'$\beta_{\mathrm{GC}}$',r'$\beta_{\mathrm{NSC}}$',r'$\beta_{\mathrm{SMT}}$']
 
 
-_models_path ='/Users/stormcolloms/Documents/PhD/Project_work/OneChannel_Flows/models_reduced.hdf5'
+_models_path ='/data/wiay/2297403c/models_reduced.hdf5'
 
 pt = 1./72.27 # Hundreds of years of history... 72.27 points to an inch.
 
@@ -116,19 +116,15 @@ def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=
             submodels_dict[ctr][idx] = model
         ctr += 1
 
-    weighted_flow.load_model(flow_dir, channel_label)
+    weighted_flow.load_model(flow_dir, device='cpu')
 
     #sample flow
 
     print('sampling flow...')
     if channel_label=='CE':
-        flow_samples_stack = weighted_flow.flow.sample(np.array([conditional[0], np.log(conditional[1])]),_Nsamps)
+        flow_samples_stack = weighted_flow.sample(np.array([conditional[0], conditional[1]]),_Nsamps)
     else:
-        flow_samples_stack = weighted_flow.flow.sample(np.array([conditional[0]]),_Nsamps)
-    flow_samples_stack[:,0] = weighted_flow.expistic(flow_samples_stack[:,0], weighted_flow.mappings[0], weighted_flow.mappings[1])
-    flow_samples_stack[:,1] = weighted_flow.expistic(flow_samples_stack[:,1], weighted_flow.mappings[2])
-    flow_samples_stack[:,2] = np.tanh(flow_samples_stack[:,2])
-    flow_samples_stack[:,3] = weighted_flow.expistic(flow_samples_stack[:,3], weighted_flow.mappings[4], weighted_flow.mappings[5])
+        flow_samples_stack = weighted_flow.sample(np.array([conditional[0]]),_Nsamps)
 
     print('sampling KDE...')
     if type(KDE_hyperparam_idxs) == type(None):
@@ -141,11 +137,11 @@ def sample_pop_corner(flow_dir, channel_label, conditional, KDE_hyperparam_idxs=
         np.save(f"{_basepath}/data/{channel_label}_KDEs_cornersample.npy", kde_samples)
         
     print('saving samples...')
-    np.save(f"{_basepath}/data/{channel_label}_flows_cornersample.npy", flow_samples_stack.numpy())
+    np.save(f"{_basepath}/data/{channel_label}_flows_cornersample.npy", flow_samples_stack)
     print('samples saved')
 
 
-def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None, conditional=None, plot_KDE=False):
+def make_pop_corner(channel_label, hyperparam_idxs, justplot=True, flow_dir=None, conditional=None, plot_KDE=True):
 
     if justplot==False:
         sample_pop_corner( flow_dir, channel_label, conditional, KDE_hyperparam_idxs=hyperparam_idxs)
@@ -363,8 +359,7 @@ def save_detectable_betas(filenames, analysis_name):
     channels =['CE', 'CHE', 'GC', 'NSC', 'SMT']
 
     #initialise flows
-    model_names, flow = get_models(_models_path, channels, params, use_flows=True, device='cpu',\
-        no_bins=[5,4,4,5,4], sensitivity='midhighlatelow')
+    model_names, flow = get_models(_models_path, channels, params, use_flows=True, device='cpu', sensitivity='midhighlatelow')
 
     #read all samples
     samples_allchains = load_result_samps(filenames)
