@@ -86,7 +86,7 @@ use_flows=args.use_flows
 discrete_sample=args.discrete_sample
 use_wandb=args.use_wandb
 lr = np.array(args.lr, dtype=float)
-print_file = open(f"outdir/output_seed{args.random_seed}.txt", "a")
+print_file = open(f"outdir/output_{args.name}_seed{args.random_seed}.txt", "a")
 
 # Check whether to use normalising flows or KDEs for inference, and if using KDEs set discrete inference to True
 if use_flows==True:
@@ -122,27 +122,29 @@ def setInDict(dataDict, mapList, value):
 
 # Construct both "underlying" KDE models (anything that has Pdet>0) and "detectable" KDE models
 # `normalize` argument normalizes KDEs on unit cube
-
 # Flow models do not support learning the detectable distribution
-
 params = list(np.asarray(args.params).flatten())
 if use_flows==True:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying Normalising Flow models...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, flow_path=args.flow_model_filename, spin_distr=args.spinmag, sensitivity=args.sensitivity, detectable=False,\
-        device=args.device)
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, flow_path=args.flow_model_filename,\
+        spin_distr=args.spinmag, sensitivity=args.sensitivity, detectable=False)
 else:
     if verbose:
         print_both(print_file, "\nReading models, applying transformations, and initializing underlying KDEs...\n")
-    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, use_unityweights=args.use_unityweights)
-    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag, sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=True, use_unityweights=args.use_unityweights)
+    model_names, pop_models = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag,\
+         sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=False, use_unityweights=args.use_unityweights)
+    _, pop_models_detectable = bbh_models.get_models(args.file_path, args.channels, args.params, use_flows, spin_distr=args.spinmag\
+        , sensitivity=args.sensitivity, normalize=args.normalize_kde, detectable=True, use_unityweights=args.use_unityweights)
 
+#grab model hyperparameters from model input file
 model_names.sort()
 hyperparams = sorted(list(set([x.split('/', 1)[1] for x in model_names])))
 Nhyper = np.max([len(x.split('/')) for x in hyperparams])
 
 
 # check that betas are provided if gwobs not specified, check betas, and sort channels and betas consistently
+# 
 if not gwobs:
     if not args.betas:
         raise ValueError("You need to either specify branching fractions or choose to instead use GW observations!")
@@ -342,7 +344,7 @@ if use_flows==True:
             else:
                 pop_models[channel].train(int(args.no_trans[i]), int(args.spline_bins[i]), int(args.no_neurons[i]), lr[i], int(args.epochs[i]), args.batch_no, args.flow_model_filename, channel, use_wandb)
         else:
-            pop_models[channel].load_model(args.flow_model_filename, channel)
+            pop_models[channel].load_model(args.flow_model_filename, device=args.device)
 else:
     if verbose:
         print_both(print_file, "Freezing sample evaluations in their respective models...")
@@ -405,44 +407,6 @@ original_shape = samples.shape
 samples = samples.reshape((samples.shape[0] * samples.shape[1], samples.shape[2]))
 raw_samples = raw_samples.reshape((raw_samples.shape[0] * raw_samples.shape[1], raw_samples.shape[2]))
 lnprb = lnprb.reshape((lnprb.shape[0] * lnprb.shape[1]))
-
-"""
-# Get samples for both *detectable* branching fractions and *underlying* branching fractions
-if verbose:
-    print_both(print_file, "Converting underlying betas from sampler to detectable betas...\n")
-detectable_samples = samples.copy()
-smdls = list(set([x.split('/',1)[1] for x in model_names]))
-# get the conversion factors between the detectable and underlying distributions
-for smdl in sorted(smdls):
-    detectable_convfacs = []
-    for channel in channels:
-        detectable_convfacs.append(getFromDict(pop_models, [channel]+smdl.split('/')).alpha)
-    detectable_convfacs = np.asarray(detectable_convfacs)
-    # loop over hyperparams to get samples in this submodel
-    hyperparams = smdl.split('/')
-    for idx, param in enumerate(hyperparams):
-        hyper_idx = list(submodels_dict[idx].keys())[list(submodels_dict[idx].values()).index(param)]
-        if idx==0:
-            matching_idxs = np.where(samples[:,idx] == hyper_idx)[0]
-            matching_samps = samples[matching_idxs]
-        else:
-            matching_idxs = matching_idxs[np.where(matching_samps[:,idx] == hyper_idx)[0]]
-            matching_samps = samples[matching_idxs]
-    # if no samples are in this model, continue
-    if len(matching_idxs)==0:
-        continue
-    # convert hyperparams of these samples accordingly to get the underlying betas
-    converted_betas = detectable_samples[matching_idxs,len(hyperparams):] * detectable_convfacs
-    converted_betas /= converted_betas.sum(axis=1, keepdims=True)
-    detectable_samples[matching_idxs,len(hyperparams):] = converted_betas
-
-    # save converted relative fractions to model0
-    if smdl==args.model0:
-        converted_rel_fracs = betas * detectable_convfacs
-        converted_rel_fracs /= np.sum(converted_rel_fracs)
-        for cidx, channel in enumerate(channels):
-            model0[channel].rel_frac_detectable(converted_rel_fracs[cidx])
-            model0_detectable[channel].rel_frac_detectable(converted_rel_fracs[cidx])"""
 
 
 # --- Print summary info about the sampling
