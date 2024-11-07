@@ -22,8 +22,8 @@ _prior = 'emcee_lnp'
 _likelihood = 'emcee_lnlike'
 _posterior = 'emcee_lnpost'
 
-_nwalkers = 16
-_nsteps = 10000
+_nwalkers = 500
+_nsteps = 1000
 _fburnin = 0.2
 
 _hyperparam_bounds = [[0.,0.5],[0.2,5.]]
@@ -209,14 +209,13 @@ def lnlike_cont(x, data, pop_models, submodels_dict, channels, prior_pdf, smalle
     betas = np.append(betas, 1-np.sum(betas))
 
     # Likelihood
-    lnprob = np.zeros(data.shape[0])-np.inf
+    lnprob = np.zeros(len(data))-np.inf
 
     # Detection effiency for this hypermodel
     alpha = 0
 
     #find log of alpha_CE for finding likelihood
     model_hyperparams = [x[0],np.log(x[1])]
-    print(x)
 
     # Iterate over channels in this submodel, return likelihood of population model
     for channel, beta in zip(channels, betas):
@@ -255,7 +254,7 @@ def lnlike_disc(x, data, pop_models, submodels_dict, channels, prior_pdf, use_fl
     betas = np.append(betas, 1-np.sum(betas))
 
     # Likelihood
-    lnprob = np.zeros(data.shape[0])-np.inf
+    lnprob = np.zeros(len(data))-np.inf
 
     # Detection effiency for this hypermodel
     alpha = 0

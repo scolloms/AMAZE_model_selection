@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import warnings
 
 import astropy.units as u
 from astropy import cosmology
@@ -20,10 +21,6 @@ scheme of GWTC-1.
 
 # can specify only a subset of GW events to use by uncommenting the line below
 _events_to_use=None
-#_events_to_use = pd.read_csv('/Users/stormcolloms/Documents/PhD/Project_work/AMAZE_model_selection/gwtc3_events/events_processed/events_processed/gwnames.csv',\
-#     dtype=str)
-#_events_to_use = np.reshape(np.array(_events_to_use),-1).tolist()
-#_events_to_use = ["GW150914", "GW151226", "GW170608", "GW190519_153544", "GW190412"]#,"GW151012","GW151226","GW170104","GW170608","GW170729","GW170809","GW170814","GW170818","GW170823"]
 
 # specify the hdf5 key for the approximant being used
 _posterior_key = "combined"
@@ -99,16 +96,15 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
         samples_shape = (len(gw_files), 1, len(params))
         samples=np.zeros(samples_shape)
     elif mesaurement_uncertainty in ['gaussian', 'posteriors', 'test']:
-        samples_shape = (len(gw_files), Nsamps, len(params))
-        samples=np.zeros(samples_shape)
+        events = []
     else:
         raise ValueError("{0:s} is not an available options for smearing GW observations!".format(mesaurement_uncertainty))
 
     # If prior key is set, set up empty array for prior weights p(theta)
     if prior is not None:
-        p_theta = np.zeros((samples.shape[0],samples.shape[1]))
+        p_theta = []
     else:
-        p_theta = np.ones((samples.shape[0],samples.shape[1]))
+        p_theta = []
 
     # Now, get the samples for each event
     for idx, f in enumerate(gw_files):
@@ -152,21 +148,24 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
             if len(df) >= Nsamps:
                 sample_idxs = np.random.choice(np.arange(len(df)), size=Nsamps, replace=False)
             else:
-                sample_idxs = np.random.choice(np.arange(len(df)), size=Nsamps, replace=True)
+                #draw all samples Ndraws times plus random without replacement extra
+                Ndraws = 0
+                sample_idxs = np.arange(len(df))
 
-            samples[idx, :, :] = df[params].iloc[sample_idxs]
+            samples = np.array(df[params].iloc[sample_idxs])
+            events.append(samples)
             if prior is not None:
-                p_theta[idx, :] = df[prior].iloc[sample_idxs]
+                p_theta.append(np.array(df[prior].iloc[sample_idxs]))
 
                 #redraw samples until all prior samples are not 0
-                while np.any(p_theta[idx, :]==0.):
-                    p_theta_zero_idx = np.where([p_theta[idx, :]==0.])[1]
-                    print(p_theta_zero_idx)
+                while np.any(p_theta[idx]==0.):
+                    #p_theta_zero_idx = np.where([p_theta[idx, :]==0.])[1]
+                    warning.warn(f'Input data contains prior=0 samples in event {gw_names[i]}')
+                    """print(p_theta_zero_idx)
                     replacement_sample_idxs = np.random.choice(np.arange(len(df)), size=p_theta_zero_idx.shape, replace=False)
 
                     samples[:, p_theta_zero_idx, :] = df[params].iloc[replacement_sample_idxs]
-                    p_theta[:,p_theta_zero_idx] = df[prior].iloc[replacement_sample_idxs]
-
+                    p_theta[:,p_theta_zero_idx] = df[prior].iloc[replacement_sample_idxs]"""
 
         if mesaurement_uncertainty == 'test':
             sample_idxs = [9,81,457]
@@ -174,5 +173,5 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
             if prior is not None:
                 p_theta[idx, :] = df[prior].iloc[sample_idxs]
 
-    return observations, samples, p_theta, gw_names
+    return observations, events, p_theta, gw_names
 

@@ -51,7 +51,7 @@ class Model(object):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, params, flow_path, sensitivity, device):
+    def from_samples(channel, samples, params, flow_path, sensitivity, device='cpu'):
         """
         Generate a Flow model instance from `samples`, where `params` are series in the `samples` dataframe. 
         
@@ -85,7 +85,7 @@ class FlowModel(Model):
         return FlowModel(channel, samples, params, flow_path, sensitivity, device=device)
 
 
-    def __init__(self, channel, samples, params, flow_path, sensitivity=None, device='cpu'):
+    def __init__(self, channel, samples, params, flow_path, sensitivity, device):
         """
         Initialisation for FlowModel object. Sets self.flow as instance of Nflow class, of which FlowModel is wrapper of that object.
 
@@ -471,7 +471,7 @@ class FlowModel(Model):
         """
         
         #initialise log likelihood as -infnity
-        likelihood = np.ones(data.shape[0]) * -np.inf
+        likelihood = np.ones(len(data)) * -np.inf
 
         #set equal prior for all samples if prior is not specified
         prior_pdf = prior_pdf if prior_pdf is not None else np.ones((data.shape[0],data.shape[1]))
@@ -557,15 +557,17 @@ class FlowModel(Model):
         mappings in form [max_logit_mchirp, max_mchirp, max_q, None, max_logit_z, max_z]
 
         """
-        mapped_data = np.zeros((np.shape(data)[0],np.shape(data)[1],np.shape(data)[2]))
+        all_mapped_data = []#np.zeros((np.shape(data)[0],np.shape(data)[1],np.shape(data)[2]))
 
         #compute logistic mappings of data
-        mapped_data[:,:,0],_,_= self.logistic(data[:,:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
-        mapped_data[:,:,1],_,_= self.logistic(data[:,:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
-        mapped_data[:,:,2]= np.arctanh(data[:,:,2])
-        mapped_data[:,:,3],_,_= self.logistic(data[:,:,3], False, max=self.mappings[4], rescale_max=self.mappings[5])
+        for event in data:
+            mapped_data[:,0],_,_= self.logistic(event[:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
+            mapped_data[:,1],_,_= self.logistic(event[:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
+            mapped_data[:,2]= np.arctanh(event[:,2])
+            mapped_data[:,3],_,_= self.logistic(event[:,3], False, max=self.mappings[4], rescale_max=self.mappings[5])
+            all_mapped_data.append(mapped_data)
 
-        return mapped_data
+        return all_mapped_data
 
 
     def logistic(self, data, wholedataset, max =1, rescale_max=1):
@@ -694,7 +696,7 @@ class FlowModel(Model):
         #train the normalising flow
         self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data, use_wandb)
 
-    def load_model(self, filepath, device='cpu'):
+    def load_model(self, filepath, device):
         """
         Loads the normalising flow into self.flow with configuration of flow network parameters from json file if it exists.
 
@@ -711,6 +713,7 @@ class FlowModel(Model):
             self.no_bins = config[self.channel_label]['bins']
             batch_size=10000
 
+            print(device)
             self.flow = NFlow(self.no_trans, self.no_neurons, self.no_params, self.conditionals, batch_size,\
                 self.total_hps, self.channel_label, RNVP=False, device=device, no_bins=self.no_bins)
         

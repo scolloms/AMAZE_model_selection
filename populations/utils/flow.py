@@ -142,7 +142,7 @@ class NFlow():
                 self.history['val'].append(total_val_loss)
 
             #print history
-            sys.stdout.write(
+            sys.stderr.write(
                     '\r Epoch: {} || Training loss: {} || Validation loss: {}'.format(
                     n+1, train_loss, total_val_loss))
             
