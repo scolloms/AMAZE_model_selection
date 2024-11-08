@@ -321,7 +321,7 @@ class NFlow():
             [Nobs x Nsamples x Nparams] shape array
         conditionals : array
             values of hyperparameters chi_b and alpha_CE
-            [Nobs x Nsamples x Nconditionals] shapped array
+            [Nconditionals] shapped array
 
         Returns
         ----------
@@ -330,37 +330,59 @@ class NFlow():
             [Nobs x Nsamples] shaped array
         """
 
+        Nsamps = np.zeros(len(sample))
+        cumNsamps = np.zeros(len(sample))
+
+
+        for event_idx, event in enumerate(sample):
+            Nsamps[event_idx] = event.shape[0]
+            cumNsamps[event_idx] = np.sum(Nsamps)
+        cumNsamps = np.append(cumNsamps,0)
+        cumNsamps = np.array(cumNsamps, dtype=int)
+
+        flat_samps = np.zeros((len(sample)*cumNsamps[-2],self.no_params))
+        flat_mapped_samps = np.zeros((len(sample)*cumNsamps[-2],self.no_params))
+
+        for event_idx, event in enumerate(sample):
+            flat_samps[cumNsamps[event_idx-1]:cumNsamps[event_idx],:] = event
+            flat_mapped_samps[cumNsamps[event_idx-1]:cumNsamps[event_idx],:] = mapped_sample[event_idx]
+
+        #tile the conditionals for number of samples
+        conditionals = np.repeat([conditionals],np.shape(flat_mapped_samps)[0], axis=0)
+
         #make sure samples in right format
-        sample = torch.from_numpy(sample.astype(np.float32)).to(self.device)
-        mapped_sample = torch.from_numpy(mapped_sample.astype(np.float32)).to(self.device)
+        flat_samps = torch.from_numpy(flat_samps.astype(np.float32)).to(self.device)
+        flat_mapped_samps = torch.from_numpy(flat_mapped_samps.astype(np.float32)).to(self.device)
         hyperparams = torch.from_numpy(conditionals.astype(np.float32)).to(self.device)
         #store shape
-        shape = mapped_sample.shape
+        #shape = mapped_sample.shape
 
         #flatten samples given they are have dimensions Nsamples x Nobs x Nparams
-        sample = torch.flatten(sample, start_dim=0, end_dim=1)
-        mapped_sample = torch.flatten(mapped_sample, start_dim=0, end_dim=1)
         hyperparams = torch.flatten(hyperparams, start_dim=0, end_dim=1)
         hyperparams = hyperparams.reshape(-1,self.cond_inputs)
-        sample = sample.reshape(-1,self.no_params)
-        mapped_sample = mapped_sample.reshape(-1,self.no_params)
+        flat_samps = flat_samps.reshape(-1,self.no_params)
+        flat_mapped_samps = flat_mapped_samps.reshape(-1,self.no_params)
 
         #removed 'None' that was stand in for secondary q mapping
         #mappings=mappings[mappings != None]
 
         with torch.no_grad():
-            log_prob = self.network.log_prob(mapped_sample, hyperparams)
-            log_prob += self.log_jacobian(sample, mappings)
+            log_prob = self.network.log_prob(flat_mapped_samps, hyperparams)
+            log_prob += self.log_jacobian(flat_samps, mappings)
 
             #reshape
-            log_prob = torch.reshape(log_prob, [shape[0],shape[1]])
+            #log_prob = torch.reshape(log_prob, [shape[0],shape[1]])
 
             log_prob = log_prob.cpu().numpy() 
             if np.any(np.isnan(log_prob)):
                 print('nans!')
             log_prob[np.isnan(log_prob)] = -np.inf
 
-        return log_prob
+        log_probs_per_event = []
+        for event in sample:
+            log_probs_per_event.append(log_prob[cumNsamps[event_idx-1]:cumNsamps[event_idx]])
+
+        return log_probs_per_event
 
     def get_latent_samps(self, samps, conditionals):
         

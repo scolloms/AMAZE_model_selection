@@ -482,10 +482,7 @@ class FlowModel(Model):
         #maps observations into the logistically mapped space
         mapped_obs = self.map_obs(data)
 
-        #conditionals tiled into shape [Nobs x Nsamples x Nconditionals]
-        conditional_hps = np.asarray(conditional_hps)
-        conditionals = np.repeat([conditional_hps],np.shape(mapped_obs)[1], axis=0)
-        conditionals = np.repeat([conditionals],np.shape(mapped_obs)[0], axis=0)
+        conditionals = np.asarray(conditional_hps)
 
         #calculates likelihoods for all events and all samples
         likelihoods_per_samp = self.flow.get_logprob(data, mapped_obs, self.mappings, conditionals)
@@ -494,19 +491,23 @@ class FlowModel(Model):
             #LSE population probability plus uniform regularisation
             pi_reg = np.log(1/(smallest_N+1))
             q_weight = np.log(smallest_N/(smallest_N+1))
-            likelihoods_per_samp = logsumexp([q_weight + likelihoods_per_samp, pi_reg*np.ones(likelihoods_per_samp.shape)], axis=0)
+            for event in range(len(data)):
+                likelihoods_per_samp[event] = logsumexp([q_weight + likelihoods_per_samp[event], pi_reg*np.ones(likelihoods_per_samp[event].shape)], axis=0)
 
+        likelihoods_per_event = np.zeros(len(data))
         #divide by the prior on the data samples
-        likelihoods_per_samp = likelihoods_per_samp - np.log(prior_pdf)
+        for event in range(len(data)):
+            likelihoods_per_samp[event] = likelihoods_per_samp[event] - np.log(prior_pdf[event])
+            likelihoods_per_event[event] = logsumexp(likelihoods_per_samp[event], axis=0) - np.log(data[event].shape[0])
 
         #checks for nans in likelihood
         if np.any(np.isnan(likelihoods_per_samp)):
-            raise Exception('Obs data is outside of range of samples for channel - cannot logistic map.')
+            raise Exception('Nans in likelihood')
 
         #adds likelihoods from samples together and then sums over events, normalise by number of samples
         #likelihood in shape [Nobs]
-        likelihood = logsumexp([likelihood, logsumexp(likelihoods_per_samp, axis=1) - np.log(data.shape[1])], axis=0)
-        
+        likelihood = logsumexp([likelihood, likelihoods_per_event], axis=0)
+
         return likelihood
 
     def get_latent_samps(self, samps, conditional):
@@ -561,6 +562,7 @@ class FlowModel(Model):
 
         #compute logistic mappings of data
         for event in data:
+            mapped_data = np.zeros((np.shape(event)[0],np.shape(event)[1]))
             mapped_data[:,0],_,_= self.logistic(event[:,0], False, max=self.mappings[0], rescale_max=self.mappings[1])
             mapped_data[:,1],_,_= self.logistic(event[:,1], False, max=self.mappings[2], rescale_max=self.mappings[3])
             mapped_data[:,2]= np.arctanh(event[:,2])

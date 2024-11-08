@@ -158,10 +158,10 @@ def generate_observations(params, gwpath, Nsamps, mesaurement_uncertainty='delta
                 p_theta.append(np.array(df[prior].iloc[sample_idxs]))
 
                 #redraw samples until all prior samples are not 0
-                while np.any(p_theta[idx]==0.):
+                """while np.any(p_theta[idx]==0.):
                     #p_theta_zero_idx = np.where([p_theta[idx, :]==0.])[1]
-                    warning.warn(f'Input data contains prior=0 samples in event {gw_names[i]}')
-                    """print(p_theta_zero_idx)
+                    warnings.warn(f'Input data contains prior=0 samples in event {gw_names[i]}')
+                    print(p_theta_zero_idx)
                     replacement_sample_idxs = np.random.choice(np.arange(len(df)), size=p_theta_zero_idx.shape, replace=False)
 
                     samples[:, p_theta_zero_idx, :] = df[params].iloc[replacement_sample_idxs]
