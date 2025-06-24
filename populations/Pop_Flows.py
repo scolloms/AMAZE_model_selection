@@ -9,7 +9,6 @@ from functools import partial
 import warnings
 import pdb
 import time
-import wandb
 import json
 from itertools import product
 
@@ -329,6 +328,7 @@ class FlowModel(Model):
         #initialise log likelihood as -infnity
         likelihood = np.ones(data.shape[0]) * -np.inf
 
+        #(SC) FIX ME: move to parent class
         #set equal prior for all samples if prior is not specified
         data_prior = data_prior if data_prior is not None else np.ones((data.shape[0],data.shape[1]))
         #raise error if any samples have prior=0
