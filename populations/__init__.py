@@ -23,6 +23,8 @@ from .population_utils.flow import NFlow
 from .population_utils.bounded_Nd_kde import Bounded_Nd_kde
 from .population_utils.transform import mtotq_to_mchirp, mtoteta_to_mchirpq, eta_to_q, mchirpq_to_m1m2
 from .population_utils.selection_effects import projection_factor_Dominik2015_interp, _PSD_defaults
+from poplar.nn.networks import LinearModel
+from poplar.nn.networks import load_model as load_deteff_model
 
 from astropy import cosmology
 from astropy.cosmology import z_at_value
@@ -65,37 +67,38 @@ class Model(object):
             if 'pdet_'+sensitivity not in samples.columns:
                 raise ValueError(f"{sensitivity} was specified for your detection weights, but cannot find the column 'pdet_{sensitivity}' in the samples datafarme!")
 
-            if multisensitivity:
-                #calculate average pdet to use for detection efficiency
-                latest_run = sensitivity.split('_')[0] #extract run from sensitivity key
-                obs_times = {'O1':{'start':1126051217, 'end':1137196817, 'det':['H1','L1']},\
-                            'O2':{'start':1164499217, 'end':1187654418, 'det':['H1','L1','V1']},\
-                            'O3a':{'start':1238112018, 'end':1253923218, 'det':['H1','L1','V1']},\
-                            'O3b':{'start':1256601618, 'end':1269302418, 'det':['H1','L1','V1']},\
-                            'O4a':{'start':1368975618, 'end':1389456018, 'det':['H1','L1']},\
-                            'O4b':{'start':1396796418, 'end':1422118818, 'det':['H1','L1','V1']},\
-                            }
-                if latest_run not in obs_times:
-                    raise ValueError(f"{sensitivity} was specified for your detection weights, but the sensitivity must start with one of {list(obs_times.keys())} if multisensitivity is specified")
-                #find observing runs up until the specified observing run
-                obsruns = np.array(list(obs_times))
-                obsruns = obsruns[:np.argwhere(obsruns==latest_run).reshape(-1)[0]+1]
-
-                #lengths of each observing run
-                cumul_obs_times = {r: obs_times[r] for r in obsruns}
-                obs_lengths = [(cumul_obs_times[OR]['end']-cumul_obs_times[OR]['start']) for OR in list(cumul_obs_times)]
-
-                pdet_keys = [f'pdet_{run}{sensitivity[len(latest_run):]}' for run in obsruns]
-                all_pdets = np.array(samples[pdet_keys])
-                #find ave pdets over all previous runs
-                pdets = np.sum(all_pdets*obs_lengths, axis=1)/np.sum(obs_lengths)
             else:
-                pdets=samples['pdet_'+sensitivity]
-            # if cosmological weights are provided, do weighted average of pdet
-            if 'weight' in samples.keys():
-                alpha = np.sum(pdets*samples['weight']) / np.sum(samples['weight'])
-            else:
-                alpha = np.sum(pdets) / len(samples)
+                if multisensitivity:
+                    #calculate average pdet to use for detection efficiency
+                    latest_run = sensitivity.split('_')[0] #extract run from sensitivity key
+                    obs_times = {'O1':{'start':1126051217, 'end':1137196817, 'det':['H1','L1']},\
+                                'O2':{'start':1164499217, 'end':1187654418, 'det':['H1','L1','V1']},\
+                                'O3a':{'start':1238112018, 'end':1253923218, 'det':['H1','L1','V1']},\
+                                'O3b':{'start':1256601618, 'end':1269302418, 'det':['H1','L1','V1']},\
+                                'O4a':{'start':1368975618, 'end':1389456018, 'det':['H1','L1']},\
+                                'O4b':{'start':1396796418, 'end':1422118818, 'det':['H1','L1','V1']},\
+                                }
+                    if latest_run not in obs_times:
+                        raise ValueError(f"{sensitivity} was specified for your detection weights, but the sensitivity must start with one of {list(obs_times.keys())} if multisensitivity is specified")
+                    #find observing runs up until the specified observing run
+                    obsruns = np.array(list(obs_times))
+                    obsruns = obsruns[:np.argwhere(obsruns==latest_run).reshape(-1)[0]+1]
+
+                    #lengths of each observing run
+                    cumul_obs_times = {r: obs_times[r] for r in obsruns}
+                    obs_lengths = [(cumul_obs_times[OR]['end']-cumul_obs_times[OR]['start']) for OR in list(cumul_obs_times)]
+
+                    pdet_keys = [f'pdet_{run}{sensitivity[len(latest_run):]}' for run in obsruns]
+                    all_pdets = np.array(samples[pdet_keys])
+                    #find ave pdets over all previous runs
+                    pdets = np.sum(all_pdets*obs_lengths, axis=1)/np.sum(obs_lengths)
+                else:
+                    pdets=samples['pdet_'+sensitivity]
+                # if cosmological weights are provided, do weighted average of pdet
+                if 'weight' in samples.keys():
+                    alpha = np.sum(pdets*samples['weight']) / np.sum(samples['weight'])
+                else:
+                    alpha = np.sum(pdets) / len(samples)
         else:
             alpha = 1.0
         return alpha
@@ -545,7 +548,7 @@ def scale_to_unity(bounds):
 
 class FlowModel(Model):
     @staticmethod
-    def from_samples(channel, samples, param_dict, channel_hyperparams, smdl_indxs_combos, sensitivity=None, multisensitivity=True):
+    def from_samples(channel, samples, param_dict, channel_hyperparams, smdl_indxs_combos, sensitivity=None, multisensitivity=True, deteff_model_path=None):
         """
         Generate a normalising flow model instance from `samples`, where the keys in `params_dict` are a series in the `samples` dataframe. 
         
@@ -613,10 +616,15 @@ class FlowModel(Model):
                 combined_weights[dict_key] = (cosmo_weights[dict_key] / np.sum(cosmo_weights[dict_key]))
             else:
                 combined_weights[dict_key] = np.ones(len(sbml_samps))
-        return FlowModel(channel, samples, param_dict, channel_hyperparams, combined_weights, alpha, model_keys)
+            
+            if deteff_model_path is not None:
+                latest_run = sensitivity.split('_')[0]
+                deteff_model_path=f'{deteff_model_path}/{channel}_{latest_run}/model.pth'
+
+        return FlowModel(channel, samples, param_dict, channel_hyperparams, combined_weights, alpha, model_keys, deteff_model_path)
 
 
-    def __init__(self, channel, samples, param_dict, channel_hyperparams, combined_weights, alpha, model_keys):
+    def __init__(self, channel, samples, param_dict, channel_hyperparams, combined_weights, alpha, model_keys, deteff_model_path):
         """
         Initialisation for FlowModel object.
         Parameters
@@ -666,6 +674,19 @@ class FlowModel(Model):
         #set weights and detection efficienies as class properties
         self.combined_weights = combined_weights
         self.alpha = alpha
+        if deteff_model_path is not None:
+            self.deteff_nn_interp = True
+            self.alpha_interp = load_deteff_model(deteff_model_path)
+        else:
+            self.deteff_nn_interp = False
+            hp_grid_shape = [len(self.hyperparam_models[i]) for i in range(len(self.hyperparam_models))]
+            alpha_grid = np.reshape(tuple(alpha.values()), (hp_grid_shape))
+
+            #initialise interpolator over hyperparameters to interolate log(detection efficiency)
+            self.alpha_interp = sp.interpolate.RegularGridInterpolator((self.hp_vals), np.log(alpha_grid),\
+                bounds_error=False, method='pchip', fill_value=None)
+        #reshape detection efficiency values onto grid the shape of hyperparameter values
+        
 
         #initialise the keys for the samples dicts and how many training submodels exist for this channel
         self.model_keys = model_keys
@@ -1139,14 +1160,10 @@ class FlowModel(Model):
             value of detection efficiency for specified hyperparameter values
         """
 
-        #reshape detection efficiency values onto grid the shape of hyperparameter values
-        hp_grid_shape = [len(self.hyperparam_models[i]) for i in range(len(self.hyperparam_models))]
-        alpha_grid = np.reshape(tuple(self.alpha.values()), (hp_grid_shape))
-
-        #initialise interpolator over hyperparameters to interolate log(detection efficiency)
-        alpha_interp = sp.interpolate.RegularGridInterpolator((self.hp_vals), np.log(alpha_grid),\
-            bounds_error=False, method='pchip', fill_value=None)
         #find alpha at specified hyperparameter values
-        alpha = np.exp(alpha_interp(hyperparams))
+        if self.deteff_nn_interp:
+            alpha = self.alpha_interp.run_on_dataset(torch.as_tensor(hyperparams).T).float()
+        else:
+            alpha = np.exp(self.alpha_interp(hyperparams))
 
         return alpha
