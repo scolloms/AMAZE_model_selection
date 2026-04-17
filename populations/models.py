@@ -130,7 +130,8 @@ def get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim):
 
 def get_models(file_path, channel_dict, param_dict, \
             hyperparam_dict, use_flows, \
-            sensitivity=None, multisensitivity=True, **kwargs):
+            sensitivity=None, multisensitivity=True, 
+            deteff_model_path=None, **kwargs):
     """
     Call this to get all the models and submodels, as well
     as KDEs of these models, packed inside of dictionaries labelled in the
@@ -175,7 +176,6 @@ def get_models(file_path, channel_dict, param_dict, \
     """
 
     deepest_models, hyperparam_pts_per_dim = get_deepest_models(file_path, channel_dict)
-
     # Flow case: reads in samples from all channels and sends to FlowModel
     if use_flows==True:
         flow_models = {}
@@ -195,7 +195,8 @@ def get_models(file_path, channel_dict, param_dict, \
                 channel_hyperparams, \
                 smdl_indxs_combos, \
                 sensitivity=sensitivity,
-                multisensitivity=multisensitivity)
+                multisensitivity=multisensitivity,
+                deteff_model_path=deteff_model_path)
         return deepest_models, flow_models
     #KDE case: reads in submodel for each of the deepest model and sends to KDEModel
     else:

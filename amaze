@@ -68,7 +68,8 @@ def amaze(args):
                 spinmag=settings['spin-mag-distribution'], \
                 max_samps=settings['kde-max-samples'], \
                 kde_bandwidth=settings['kde-bandwidth'], \
-                store_optimal_snrs=store_optimal_snrs)
+                store_optimal_snrs=store_optimal_snrs, \
+                deteff_model_path=settings['deteff_model_path'])
 
     #grab model hyperparameters from model input file
     model_names.sort()
