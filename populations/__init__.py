@@ -617,9 +617,9 @@ class FlowModel(Model):
             else:
                 combined_weights[dict_key] = np.ones(len(sbml_samps))
             
-            if deteff_model_path is not None:
-                latest_run = sensitivity.split('_')[0]
-                deteff_model_path=f'{deteff_model_path}/{channel}_{latest_run}/model.pth'
+        if deteff_model_path is not None:
+            latest_run = sensitivity.split('_')[0]
+            deteff_model_path=f'{deteff_model_path}/{channel}_{latest_run}/final_model/model/model.pth'
 
         return FlowModel(channel, samples, param_dict, channel_hyperparams, combined_weights, alpha, model_keys, deteff_model_path)
 
@@ -676,8 +676,10 @@ class FlowModel(Model):
         self.alpha = alpha
         if deteff_model_path is not None:
             self.deteff_nn_interp = True
-            self.alpha_interp = load_deteff_model(deteff_model_path)
+            print(channel, deteff_model_path)
+            self.alpha_interp = load_deteff_model(deteff_model_path, device='cpu')
         else:
+            print('Using Pchip interpolation for detection efficiency')
             self.deteff_nn_interp = False
             hp_grid_shape = [len(self.hyperparam_models[i]) for i in range(len(self.hyperparam_models))]
             alpha_grid = np.reshape(tuple(alpha.values()), (hp_grid_shape))
@@ -1162,7 +1164,7 @@ class FlowModel(Model):
 
         #find alpha at specified hyperparameter values
         if self.deteff_nn_interp:
-            alpha = self.alpha_interp.run_on_dataset(torch.as_tensor(hyperparams).T).float()
+            alpha = self.alpha_interp.run_on_dataset(torch.as_tensor(np.array(hyperparams)).float()).cpu().numpy()
         else:
             alpha = np.exp(self.alpha_interp(hyperparams))
 
