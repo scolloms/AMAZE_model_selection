@@ -130,7 +130,7 @@ def get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim):
 
 def get_models(file_path, channel_dict, param_dict, \
             hyperparam_dict, use_flows, \
-            sensitivity=None, multisensitivity=True, **kwargs):
+            sensitivity=None, multisensitivity=True, deteff_model_path=None, **kwargs):
     """
     Call this to get all the models and submodels, as well
     as KDEs of these models, packed inside of dictionaries labelled in the
