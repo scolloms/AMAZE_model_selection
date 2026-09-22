@@ -676,7 +676,8 @@ class FlowModel(Model):
         self.alpha = alpha
         if deteff_model_path is not None:
             self.deteff_nn_interp = True
-            print(channel, deteff_model_path)
+            print(f'Using SNRflow interpolation for detection efficiency, with models from {deteff_model_path}')
+            #print(channel, deteff_model_path)
             self.alpha_interp = load_deteff_model(deteff_model_path, device='cpu')
         else:
             print('Using Pchip interpolation for detection efficiency')
