@@ -8,6 +8,7 @@ import numpy as np
 np.set_printoptions(legacy='1.25') #so datatypes aren't printed
 import pandas as pd
 from copy import deepcopy
+import argparse
 
 from functools import reduce
 import operator
@@ -38,28 +39,8 @@ def ParseIniFile(file_path):
     config_dict = {}
     for section in config.sections():
         config_dict[section] = {}
-        for key, value in config.items(section):
-            # Check if the value is a list or a dictionary
-            if value.startswith('[') and value.endswith(']'):
-                config_dict[section][key] = ast.literal_eval(value)
-            elif value.startswith('{') and value.endswith('}'):
-                config_dict[section][key] = ast.literal_eval(value)
-            # Check if the value is a number
-            elif value.isdigit():
-                config_dict[section][key] = int(value)
-            elif value.replace('.', '', 1).isdigit():
-                config_dict[section][key] = float(value)
-            # Check if the value is a boolean
-            elif value in ['True','true','yes','y']:
-                config_dict[section][key] = True
-            elif value in ['False','false','no','n']:
-                config_dict[section][key] = False
-            # Check if the value is None
-            elif value in ['None','none','']:
-                config_dict[section][key] = None
-            else:
-                # it's just a string
-                config_dict[section][key] = value
+        CheckDictTypes(config.items(section), config_dict[section])
+        
     MainSettings = config_dict.get('MainSettings')
     RealObservations = config_dict.get('RealObservations')
     MockObservations = config_dict.get('MockObservations')
@@ -75,8 +56,57 @@ def ParseIniFile(file_path):
         for key, value in section.items():
             settings[key] = value
 
+    override_args = GetCommandLineArgs(settings.keys())
+    settings = MergeConfigWithArgs(settings,override_args)
+
     return settings
 
+def GetCommandLineArgs(keys):
+    parser = argparse.ArgumentParser()
+    #will only add keys for fields in original ini file - new args cannot be added via command line
+    for key in keys:
+        parser.add_argument(f'--{key}')
+    args, unknown = parser.parse_known_args()
+    return args
+
+def MergeConfigWithArgs(settings,override_args):
+
+    override_dict = CheckDictTypes(vars(override_args).items(), {})
+
+    for key, value in override_dict.items():
+        if value is not None:
+            #undo argparse's conversion to underscores
+            replace_key = key.replace('_', '-')
+            print(f'Overriding setting {replace_key} with value {value} from command line.')
+            settings[replace_key] = value
+
+    return settings
+
+def CheckDictTypes(to_check, target_dict):
+    for key, value in to_check:
+        if value is not None:
+            # Check if the value is a list or a dictionary
+            if value.startswith('[') and value.endswith(']'):
+                target_dict[key] = ast.literal_eval(value)
+            elif value.startswith('{') and value.endswith('}'):
+                target_dict[key] = ast.literal_eval(value)
+            # Check if the value is a number
+            elif value.isdigit():
+                target_dict[key] = int(value)
+            elif value.replace('.', '', 1).isdigit():
+                target_dict[key] = float(value)
+            # Check if the value is a boolean
+            elif value in ['True','true','yes','y']:
+                target_dict[key] = True
+            elif value in ['False','false','no','n']:
+                target_dict[key] = False
+            # Check if the value is None
+            elif value in ['None','none','']:
+                target_dict[key] = None
+            else:
+                # it's just a string
+                target_dict[key] = value
+    return target_dict
 
 def ErrorCheckIni(settings):
     """

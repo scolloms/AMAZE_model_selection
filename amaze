@@ -40,9 +40,6 @@ def amaze(args):
     if settings['random-seed']:
         np.random.seed(settings['random-seed'])
         random_seed = settings['random-seed']
-    elif len(args) > 1:
-        np.random.seed(int(args[1]))
-        random_seed = args[1]
     else:
         random_seed = None
 
