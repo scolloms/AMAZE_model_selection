@@ -1015,7 +1015,8 @@ class FlowModel(Model):
             data *=rescale_max
         return(data)
 
-    def train(self, no_trans, no_neurons, no_blocks, no_bins, lr, epochs, batch_size, filepath, device, random_seed, update_every, frac_dataset_per_epoch):
+    def train(self, no_trans, no_neurons, no_blocks, no_bins, lr, epochs, batch_size, filepath, device,\
+        random_seed, update_every, frac_dataset_per_epoch, verbose):
         """
         Trains the normalising flow with certain configuration of flow network parameters.
         Saves these network parameters to a json config file, and saves flow post training.
@@ -1084,7 +1085,7 @@ class FlowModel(Model):
 
         save_filename = f'{filepath}/{self.channel_label}'
         #train the normalising flow
-        self.flow.trainval(lr, epochs, batch_size, save_filename, training_data, val_data, update_every, frac_dataset_per_epoch)
+        self.flow.trainval(lr, epochs, batch_size, save_filename, training_data, val_data, update_every, frac_dataset_per_epoch, verbose)
 
     def load_model(self, filepath, device='cpu'):
         """

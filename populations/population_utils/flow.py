@@ -80,7 +80,7 @@ class NFlow():
     def to_torch(self, a):
         return torch.from_numpy(np.asarray(a, dtype=np.float32)).to(self.device)
 
-    def trainval(self, lr, epochs, batch_size, filename, training_data, val_data, update_every, frac_dataset_per_epoch):
+    def trainval(self, lr, epochs, batch_size, filename, training_data, val_data, update_every, frac_dataset_per_epoch, verbose):
         """
         Train the normalising flow for the specified number of epochs using a set of training and validation data,
         and save the model with the best validation loss
@@ -125,15 +125,18 @@ class NFlow():
         if frac_dataset_per_epoch <1.:
             frac_dataset_per_epoch = min(1.,frac_dataset_per_epoch)
             if frac_dataset_per_epoch < 0.:
-                print('Cannot use less training samples than 0, setting frac_dataset_per_epoch=0.01')
+                if verbose:
+                    print('Cannot use less training samples than 0, setting frac_dataset_per_epoch=0.01')
                 frac_dataset_per_epoch = 0.01
             n_train_per_epoch = int(ytrainsize * frac_dataset_per_epoch)
             n_batches = n_train_per_epoch // batch_size
             n_val_per_epoch = int(val_samps.shape[0] * frac_dataset_per_epoch)
-            print(f'Downsampling no. training samples per epoch to {n_train_per_epoch} and no. validation samples per epoch to {n_val_per_epoch}')
+            if verbose:
+                print(f'Downsampling no. training samples per epoch to {n_train_per_epoch} and no. validation samples per epoch to {n_val_per_epoch}')
         val_batch_size = batch_size
         n_val_batches = n_val_per_epoch // val_batch_size
-        print(f'Using a batch size of {batch_size} for {ytrainsize} total training samples.')
+        if verbose:
+            print(f'Using a batch size of {batch_size} for {ytrainsize} total training samples.')
 
         n_epochs = epochs
 
@@ -252,8 +255,7 @@ class NFlow():
 
         #save loss data
         plt.savefig(f'{filename}loss.pdf')
-        #pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history.cpu().numpy()),f'{filename}_loss_history.csv')
-
+        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
 
 
     def sample(self, conditional,no_samples):
@@ -286,68 +288,6 @@ class NFlow():
             samples = self.network.sample(no_samples, conditional=conditional.to(self.device))
 
         return(samples.cpu())
-
-    def get_training_data(self, training_samples):
-        """
-        Get random batch training data from training_samples
-        
-        Returns
-        -------
-        xdata : tensor 
-            a batch of training data samples of shape [no_samples, self.no_params]
-        xhyperparams : tensor
-            the corersponding conditional hyperparameters to the batch of training data
-            of shape [no_samples, self.cond_inputs]
-        xweights : tensor
-            the corersponding sample weigths to the batch of training data
-            of shape [no_samples]
-        """
-        #retrieve random samples of size batch_size from training samples
-        random_sample_idxs = np.random.choice(np.shape(training_samples)[0],size=(int(self.batch_size)))
-
-        #retrieve dataspace samples, and corresponding hyperparameters and weights to the randomly drawn samples
-        batched_samples = training_samples[random_sample_idxs,:self.no_params]
-        batched_hp_pairs = training_samples[random_sample_idxs, self.no_params:self.no_params+self.cond_inputs]
-        batch_weights = training_samples[random_sample_idxs,-1]
-
-        #reshape tensors to be correct shape
-        xdata=torch.from_numpy(batched_samples.astype(np.float32)).to(self.device)
-        xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32)).to(self.device)
-        xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
-        xweights = torch.from_numpy(batch_weights.astype(np.float32)).to(self.device)
-
-        return(xdata, xhyperparams,xweights)
-
-    def get_val_data(self, validation_data):
-        """
-        Get random batch validation data from self.validation_data
-        
-        Returns
-        -------
-        xval : tensor 
-            a batch of validation data samples of shape [no_samples, self.no_params]
-        xhyperparams : tensor
-            the corersponding conditional hyperparameters to the batch of validation data
-            of shape [no_samples, self.cond_inputs]
-        xweights : tensor
-            the corersponding sample weigths to the batch of validation data
-            of shape [no_samples]
-        """
-
-        #pull batch from data
-        random_sample_idxs = np.random.choice(np.shape(validation_data)[0], size=(int(self.batch_size)))
-
-        #retrieve dataspace samples, and corresponding hyperparameters and weights to the randomly drawn samples
-        batched_samples = validation_data[random_sample_idxs,:self.no_params]
-        batched_hp_pairs = validation_data[random_sample_idxs, self.no_params:self.no_params+self.cond_inputs]
-        batch_weights = validation_data[random_sample_idxs,-1]
-
-        #reshape
-        xval=torch.from_numpy(batched_samples.astype(np.float32)).to(self.device)
-        xhyperparams = torch.from_numpy(batched_hp_pairs.astype(np.float32)).to(self.device)
-        xhyperparams = xhyperparams.reshape(-1,self.cond_inputs)
-        xweights = torch.from_numpy(batch_weights.astype(np.float32)).to(self.device)
-        return(xval, xhyperparams, xweights)
 
     def load_model(self,filename):
         """
