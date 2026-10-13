@@ -69,7 +69,7 @@ def amaze(args):
                 max_samps=settings['kde-max-samples'], \
                 kde_bandwidth=settings['kde-bandwidth'], \
                 store_optimal_snrs=store_optimal_snrs, \
-                deteff_model_path=settings['deteff_model_path'])
+                deteff_model_path=settings['deteff-model-path'])
 
     #grab model hyperparameters from model input file
     model_names.sort()
@@ -132,63 +132,64 @@ def amaze(args):
 
 
     # --- Generate observations (shape: [observations, samples, params])
-    if verbose:
-        print("\n\nGenerating observations...\n")
+    if not settings['train-only']:
+        if verbose:
+            print("\n\nGenerating observations...\n")
 
-    # Calls observations.py to generate samples if argument is passed
-    # NOTE: model0 denotes the 'true' model data if not using actual observations
-    if not settings['true-model']:
-        true_model=None
-        model0=None
-        obs, obs_samples, p_theta, events = observations.read_observations(\
-                    params=settings['event-parameter-dict'].keys(), \
-                    Nsamps=settings['n-samples'], \
-                    obs_path=settings['event-samples-path'], \
-                    events_to_exclude=settings['events-to-exclude'], \
-                    prior_key=settings['event-level-prior'],\
-                    repeat_samples=not settings['use-flows'])
-        if verbose:
-            print("Using the following {0:d} observations for inference: \n[".format(len(events)) + ", ".join(events) + "]\n")
-    else:
-        if verbose:
-            print("Drawing {0:d} observations from 'true' model, assuming that the branching fractions represent the underlying distribution, and using the '{1:s}' method for mock measurement uncertainty...".format(settings['n-observations'], settings['mock-uncertainty']))
-        events = None
-        rand_vars = np.random.random(size=settings['n-observations'])
-        randlow_hold = 0
-        for idx, channel in enumerate(model0):
-            if settings['probabilistic-draws']==True:
-                Nobs_from_channel = len(np.where((rand_vars>=randlow_hold) & \
-                        (rand_vars<(randlow_hold+model0[channel].rel_frac)))[0])
-                randlow_hold += model0[channel].rel_frac
-            else:
-                # first check that the (branching_fractions * Nobs) are integers
-                if not (settings['n-observations']*model0[channel].rel_frac).is_integer():
-                    warnings.warn("Number of observations is not divisble by detectable branching fractions provided, this may result in drawing a number of samples slighty different than what was specified!")
-                Nobs_from_channel = int(np.round(settings['n-observations'] * model0[channel].rel_frac))
-            # add attribute for number of observations drawn
-            model0[channel].Nobs_from_beta(Nobs_from_channel)
-            if idx==0:
-                obs = model0[channel].generate_observations(\
-                    Nobs=Nobs_from_channel, \
-                    verbose=verbose)
-                obs_samples = model0[channel].measurement_uncertainty(\
-                    Nsamps=settings['n-samples'], \
-                    method=settings['mock-uncertainty'], \
-                    observation_noise=True, \
-                    verbose=verbose)
-            else:
-                obs = np.concatenate((obs, \
-                    model0[channel].generate_observations(\
-                    Nobs=Nobs_from_channel, \
-                    verbose=verbose)))
-                obs_samples = np.concatenate((obs_samples, \
-                    model0[channel].measurement_uncertainty(\
-                    Nsamps=settings['n-samples'], \
-                    method=settings['mock-uncertainty'], \
-                    observation_noise=True, \
-                    verbose=verbose)))
-        # assume equal prior weight for each mock posterior sample
-        p_theta = np.ones((obs_samples.shape[0],obs_samples.shape[1]))
+        # Calls observations.py to generate samples if argument is passed
+        # NOTE: model0 denotes the 'true' model data if not using actual observations
+        if not settings['true-model']:
+            true_model=None
+            model0=None
+            obs, obs_samples, p_theta, events = observations.read_observations(\
+                        params=settings['event-parameter-dict'].keys(), \
+                        Nsamps=settings['n-samples'], \
+                        obs_path=settings['event-samples-path'], \
+                        events_to_exclude=settings['events-to-exclude'], \
+                        prior_key=settings['event-level-prior'],\
+                        repeat_samples=not settings['use-flows'])
+            if verbose:
+                print("Using the following {0:d} observations for inference: \n[".format(len(events)) + ", ".join(events) + "]\n")
+        else:
+            if verbose:
+                print("Drawing {0:d} observations from 'true' model, assuming that the branching fractions represent the underlying distribution, and using the '{1:s}' method for mock measurement uncertainty...".format(settings['n-observations'], settings['mock-uncertainty']))
+            events = None
+            rand_vars = np.random.random(size=settings['n-observations'])
+            randlow_hold = 0
+            for idx, channel in enumerate(model0):
+                if settings['probabilistic-draws']==True:
+                    Nobs_from_channel = len(np.where((rand_vars>=randlow_hold) & \
+                            (rand_vars<(randlow_hold+model0[channel].rel_frac)))[0])
+                    randlow_hold += model0[channel].rel_frac
+                else:
+                    # first check that the (branching_fractions * Nobs) are integers
+                    if not (settings['n-observations']*model0[channel].rel_frac).is_integer():
+                        warnings.warn("Number of observations is not divisble by detectable branching fractions provided, this may result in drawing a number of samples slighty different than what was specified!")
+                    Nobs_from_channel = int(np.round(settings['n-observations'] * model0[channel].rel_frac))
+                # add attribute for number of observations drawn
+                model0[channel].Nobs_from_beta(Nobs_from_channel)
+                if idx==0:
+                    obs = model0[channel].generate_observations(\
+                        Nobs=Nobs_from_channel, \
+                        verbose=verbose)
+                    obs_samples = model0[channel].measurement_uncertainty(\
+                        Nsamps=settings['n-samples'], \
+                        method=settings['mock-uncertainty'], \
+                        observation_noise=True, \
+                        verbose=verbose)
+                else:
+                    obs = np.concatenate((obs, \
+                        model0[channel].generate_observations(\
+                        Nobs=Nobs_from_channel, \
+                        verbose=verbose)))
+                    obs_samples = np.concatenate((obs_samples, \
+                        model0[channel].measurement_uncertainty(\
+                        Nsamps=settings['n-samples'], \
+                        method=settings['mock-uncertainty'], \
+                        observation_noise=True, \
+                        verbose=verbose)))
+            # assume equal prior weight for each mock posterior sample
+            p_theta = np.ones((obs_samples.shape[0],obs_samples.shape[1]))
 
 
     # --- Prepare population models
@@ -199,10 +200,8 @@ def amaze(args):
     #   observation values aren't going to change.
 
     if settings['use-flows']==True:
-        # MJZ: Haven't tested this yet
         if verbose:
             print('Training or loading normalising flow models...\n')
-        # MJZ: Haven't tested this yet
         for i, channel in enumerate(channels):
             if settings['train-flows'] == True:
                 pop_models[channel].train(\
@@ -212,13 +211,23 @@ def amaze(args):
                         settings['flow-settings'][channel]['spline-bins'], \
                         settings['flow-settings'][channel]['learning-rate'], \
                         settings['flow-settings'][channel]['epochs'], \
-                        settings['n-batches'], \
+                        settings['batch-size'], \
                         settings['flow-model-path'], \
-                        device=settings['device'])
+                        device=settings['device'], \
+                        random_seed=random_seed, \
+                        update_every=settings['update-every'], \
+                        frac_dataset_per_epoch=settings['frac-dataset-per-epoch'],\
+                        verbose=verbose)
             else:
+                if settings['train-only'] == True:
+                    print('train-only function requires train-flows setting to be True. Please change settings.')
                 pop_models[channel].load_model(\
                         settings['flow-model-path'], \
                         device=settings['device'])
+        if settings['train-only'] == True:
+            if verbose:
+                print('Flows finished training, ending AMAZE now')
+            sys.exit()
     else:
         if verbose:
             print("\nFreezing sample evaluations in their respective models...")

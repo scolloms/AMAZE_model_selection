@@ -9,6 +9,7 @@ from functools import partial
 import warnings
 import pdb
 import json
+from itertools import product
 
 import numpy as np
 import scipy as sp
@@ -773,8 +774,8 @@ class FlowModel(Model):
                 train_test_split(models_stack, weights, hps_stack, shuffle=True, train_size=0.8)
 
         #concatenate training and validation data in order: samples, hyperparameters, weights
-        training_data = np.concatenate((train_models_stack, training_hps_stack, train_weights), axis=1)
-        val_data = np.concatenate((validation_models_stack, validation_hps_stack, validation_weights), axis=1)
+        training_data = [train_models_stack, training_hps_stack, train_weights]
+        val_data = [validation_models_stack, validation_hps_stack, validation_weights]
 
         return(training_data, val_data)
 
@@ -1014,7 +1015,7 @@ class FlowModel(Model):
             data *=rescale_max
         return(data)
 
-    def train(self, no_trans, no_neurons, no_blocks, no_bins, lr, epochs, batch_no, filepath, device):
+    def train(self, no_trans, no_neurons, no_blocks, no_bins, lr, epochs, batch_size, filepath, device, random_seed, update_every, frac_dataset_per_epoch):
         """
         Trains the normalising flow with certain configuration of flow network parameters.
         Saves these network parameters to a json config file, and saves flow post training.
@@ -1032,8 +1033,8 @@ class FlowModel(Model):
             the initial learning rate of the flow
         epochs : int
             the number of epochs which to train the flow
-        batch_no : int
-            the number of samples to use for a batch of training
+        batch_size : int
+            the size of each batch of data to use for training
         filepath : str
             the directory to save the flow models and associated config
         deivce : str
@@ -1046,11 +1047,11 @@ class FlowModel(Model):
         self.no_blocks = no_blocks
         self.no_bins = no_bins
 
-        #FIXME - make this a settable parameter
-        batch_size=10000
+        #set seed for reproducability - not all results 100% reproducable even with same seed
+        torch.manual_seed(random_seed)
 
         #initislise flow network as NFlow class
-        self.flow = NFlow(self.no_trans, self.no_neurons, self.no_blocks, self.no_bins, self.no_params, self.conditionals, batch_size, 
+        self.flow = NFlow(self.no_trans, self.no_neurons, self.no_blocks, self.no_bins, self.no_params, self.conditionals, 
                     self.total_smdls, RNVP=False, device=device)
 
         #map the training and validation samples
@@ -1083,7 +1084,7 @@ class FlowModel(Model):
 
         save_filename = f'{filepath}/{self.channel_label}'
         #train the normalising flow
-        self.flow.trainval(lr, epochs, batch_no, save_filename, training_data, val_data)
+        self.flow.trainval(lr, epochs, batch_size, save_filename, training_data, val_data, update_every, frac_dataset_per_epoch)
 
     def load_model(self, filepath, device='cpu'):
         """
@@ -1138,11 +1139,8 @@ class FlowModel(Model):
         else:
             raise Exception("no config available")
 
-        #FIXME: make this a settable parameter
-        batch_size=10000
-
         #initialise NFlow model
-        self.flow = NFlow(self.no_trans, self.no_neurons, self.no_blocks, self.no_bins, self.no_params, self.conditionals, batch_size,\
+        self.flow = NFlow(self.no_trans, self.no_neurons, self.no_blocks, self.no_bins, self.no_params, self.conditionals,\
             self.total_smdls, RNVP=False, device=device)
 
         #load in actual flow model

@@ -27,7 +27,7 @@ class NFlow():
     #or neural spline flow
     #spline flow increases the flexibility in the flow model
     def __init__(self, no_trans, no_neurons, no_blocks, no_bins, training_inputs, cond_inputs,
-                batch_size, total_smdls, RNVP=False, device="cpu"):
+                total_smdls, RNVP=False, device="cpu"):
                 
         """
         Initialise Flow with inputed data, either RNVP or Spline flow.
@@ -56,7 +56,6 @@ class NFlow():
             device on which to run pytorch operations, default is CPU, otherwise GPU enabled with device = 'cuda:0'
         """
         self.no_params = training_inputs
-        self.batch_size = batch_size
 
         self.total_smdls = total_smdls
         self.cond_inputs = cond_inputs
@@ -78,7 +77,10 @@ class NFlow():
 
         self.network.to(device)
 
-    def trainval(self, lr, epochs, batch_no, filename, training_data, val_data):
+    def to_torch(self, a):
+        return torch.from_numpy(np.asarray(a, dtype=np.float32)).to(self.device)
+
+    def trainval(self, lr, epochs, batch_size, filename, training_data, val_data, update_every, frac_dataset_per_epoch):
         """
         Train the normalising flow for the specified number of epochs using a set of training and validation data,
         and save the model with the best validation loss
@@ -89,14 +91,20 @@ class NFlow():
             the initial learning rate used to train the normalising flow, which is then reduced with cosine annealing
         epochs : int
             number iterations to train for  - 1 epoch goes through through entire dataset
-        batch_no : int
-            number of batches of data in one iteration
+        batch_size : int
+            number of training samples in one batch of training
         filename : str
             directory and filename of where to save best flow model
         training_data : array
             set of training data points for the normlising flow
         val_data : array
             set of validation data points for the normlising flow
+        update_every : int or None
+            number of epochs after which to plot the loss so far during training. 
+            if None will not create updating loss plot and only plot at the end
+        frac_dataset_per_epoch : float
+            fraction of training and validation data to train on per training epoch. if less than one, speeds up training.
+            recommendation is to set this s.t. max number of samples per epoch is O(1e5)
         """
         #set optimiser for flow, optimises flow parameters:
         #affine - s and t that shift and scale the transforms
@@ -105,8 +113,29 @@ class NFlow():
         #set learning rate cheduler
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=epochs, eta_min=0, last_epoch=- 1)
 
+        #unpack training and validation data and assign to torch tensors
+        training_samps, training_conds, training_weights = [self.to_torch(a) for a in training_data]
+        val_samps, val_conds, val_weights = [self.to_torch(a) for a in val_data]
+
+        #determine batch size in order to use all available training samples
+        ytrainsize = len(training_samps)
+        n_batches = ytrainsize // batch_size
+
+        #update batch size if not using all samples in training/val set every epoch
+        if frac_dataset_per_epoch <1.:
+            frac_dataset_per_epoch = min(1.,frac_dataset_per_epoch)
+            if frac_dataset_per_epoch < 0.:
+                print('Cannot use less training samples than 0, setting frac_dataset_per_epoch=0.01')
+                frac_dataset_per_epoch = 0.01
+            n_train_per_epoch = int(ytrainsize * frac_dataset_per_epoch)
+            n_batches = n_train_per_epoch // batch_size
+            n_val_per_epoch = int(val_samps.shape[0] * frac_dataset_per_epoch)
+            print(f'Downsampling no. training samples per epoch to {n_train_per_epoch} and no. validation samples per epoch to {n_val_per_epoch}')
+        val_batch_size = batch_size
+        n_val_batches = n_val_per_epoch // val_batch_size
+        print(f'Using a batch size of {batch_size} for {ytrainsize} total training samples.')
+
         n_epochs = epochs
-        n_batches = batch_no 
 
         #initialize best flow model
         best_epoch = 0
@@ -117,7 +146,9 @@ class NFlow():
 
         #training loop
         for n in range(n_epochs): 
-            train_loss = 0
+            shuffled_inds = torch.randperm(ytrainsize, device=self.device)[:n_train_per_epoch]
+
+            train_loss_torch = torch.zeros((), device=self.device)
             unweighted_KL_train = 0
 
             #set flow into training mode
@@ -125,54 +156,61 @@ class NFlow():
             self.history['lr'].append(scheduler.get_last_lr())
             
             #Training
-            for _ in range(n_batches):
-                #split training data into - train: binary params; conditional: pop hyperparams
-                x_train, x_conditional, xweights = self.get_training_data(training_data)
-                #sets flow optimisers gradients to zero
-                optimiser.zero_grad()
-                #calculate the training loss function for flow as -log_prob
-                unweighted_KL = self.network.log_prob(x_train, conditional=x_conditional)
-                loss = -(xweights*unweighted_KL).mean()
+            for i in range(n_batches):
+                idx = shuffled_inds[i * batch_size:(i + 1)*batch_size]
+                #calculate the training loss function for flow as -mean(weight(x)*log_prob(x))
+                unweighted_KL = self.network.log_prob(training_samps[idx], conditional=training_conds[idx])
+                loss = -(training_weights[idx]*unweighted_KL).mean()
+
+                optimiser.zero_grad(set_to_none=True)
                 #computes gradient of flow network parameters
                 loss.backward()
                 #steps optimtiser down gradient of loss surface
                 optimiser.step()
                 #track flow losses
-                unweighted_KL_train += -unweighted_KL.mean().cpu().item()
-                train_loss += loss.cpu().item()
+                #unweighted_KL_train += -unweighted_KL.mean().cpu().item()
+                train_loss_torch += loss.detach()
             scheduler.step()
 
             #track and average losses
-            train_loss /= n_batches
+            train_loss = train_loss_torch.item() / n_batches
             self.history['train'].append(train_loss)
+         
+            #evaluate flow parameters for validation
+            self.network.eval()
             
             # Validate
-            with torch.no_grad(): #disables gradient caluclation
-                #call validation data
-                x_val, x_conditional_val, x_weights_val = self.get_val_data(val_data)
-                
-                #evaluate flow parameters
-                self.network.eval()
+            with torch.no_grad(): #disables gradient calculation
+                val_idx = torch.randperm(val_samps.shape[0], device=self.device)[:n_val_per_epoch]
+                val_samps_batch, val_conds_batch, val_weights_batch = val_samps[val_idx], val_conds[val_idx], val_weights[val_idx]
+                weighted_sum = torch.zeros((), device=self.device)
 
-                #calculate flow validation loss
-                unweighted_KL_loss = self.network.log_prob(x_val, conditional=x_conditional_val)
-                val_loss = - (unweighted_KL_loss).mean()
-                val_loss = - (x_weights_val*unweighted_KL_loss).mean()
-                total_val_loss=val_loss.cpu().numpy() 
-                total_unweighted_KL_val = -unweighted_KL_loss.mean().cpu().numpy()
+                #loop over all validation data to avoid memory issues, but validate on all available data per epoch
+                for i in range(n_val_batches):
+                    #calculate flow validation loss
+                    unweighted_KL_loss = self.network.log_prob(val_samps_batch[i*val_batch_size:(i + 1)*val_batch_size], conditional=val_conds_batch[i*val_batch_size:(i + 1)*val_batch_size])
+                    weighted_sum += (val_weights_batch[i*val_batch_size:(i + 1)*val_batch_size] * unweighted_KL_loss).mean()
+
+                total_val_loss =  - weighted_sum / n_val_batches
+                #total_unweighted_KL_val = -unweighted_KL_loss.mean().cpu().numpy()
                 #save the loss value of the training data
-                self.history['val'].append(total_val_loss)
+                self.history['val'].append(total_val_loss.cpu().numpy())
 
             #print history
             sys.stdout.write(
                     '\r Epoch: {} || Training loss: {} || Validation loss: {}'.format(
                     n+1, train_loss, total_val_loss))
+            sys.stdout.flush()
             
             #copy the best flow model
             if total_val_loss < best_val_loss:
                 best_epoch = n
                 best_val_loss = total_val_loss
                 best_model = copy.deepcopy(self.network.state_dict())
+            
+            if update_every is not None and n % update_every == 0:
+                    self.plot_history(filename)
+                    torch.save(best_model, f'{filename}_{update_every}.pt')
 
         #save best model
         print(f'\n Best epoch: {best_epoch}')
@@ -214,14 +252,7 @@ class NFlow():
 
         #save loss data
         plt.savefig(f'{filename}loss.pdf')
-        pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history),f'{filename}_loss_history.csv')
-
-        #plot learning rate
-        fig, ax = plt.subplots(figsize = (10,5))
-        ax.plot(self.history['lr'], label = 'lr')
-        ax.set_ylabel('Learning rate', fontsize=10)
-        ax.set_xlabel('Epochs', fontsize=10)
-        plt.savefig(f'{filename}lr.pdf')
+        #pd.DataFrame.to_csv(pd.DataFrame.from_dict(self.history.cpu().numpy()),f'{filename}_loss_history.csv')
 
 
 
