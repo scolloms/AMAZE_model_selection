@@ -1079,6 +1079,8 @@ class FlowModel(Model):
             old_config[self.channel_label] = channel_config
             #load old config of other channels
             channel_json = old_config
+        else:
+            os.makedirs(filepath, exist_ok=True)
 
         #write this channels config to file
         with open(f'{filepath}/flowconfig.json', 'w') as f:

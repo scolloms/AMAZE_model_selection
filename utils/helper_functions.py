@@ -66,6 +66,7 @@ def GetCommandLineArgs(keys):
     #will only add keys for fields in original ini file - new args cannot be added via command line
     for key in keys:
         parser.add_argument(f'--{key}')
+    parser.add_argument('--f','-f','--fff', default='1', help='dummy arg for jupyter notebooks')
     args, unknown = parser.parse_known_args()
     return args
 

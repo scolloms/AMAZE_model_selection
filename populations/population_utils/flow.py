@@ -115,22 +115,25 @@ class NFlow():
 
         #unpack training and validation data and assign to torch tensors
         training_samps, training_conds, training_weights = [self.to_torch(a) for a in training_data]
+        training_weights = training_weights.reshape(-1)
         val_samps, val_conds, val_weights = [self.to_torch(a) for a in val_data]
+        val_weights = val_weights.reshape(-1)
 
         #determine batch size in order to use all available training samples
         ytrainsize = len(training_samps)
         n_batches = ytrainsize // batch_size
 
+        n_train_per_epoch = int(ytrainsize * frac_dataset_per_epoch)
+        n_batches = n_train_per_epoch // batch_size
+        n_val_per_epoch = int(val_samps.shape[0])
+
         #update batch size if not using all samples in training/val set every epoch
         if frac_dataset_per_epoch <1.:
             frac_dataset_per_epoch = min(1.,frac_dataset_per_epoch)
-            if frac_dataset_per_epoch < 0.:
+            if frac_dataset_per_epoch <= 0.:
                 if verbose:
-                    print('Cannot use less training samples than 0, setting frac_dataset_per_epoch=0.01')
+                    print('Cannot use less than 0 training samples, setting frac_dataset_per_epoch=0.01')
                 frac_dataset_per_epoch = 0.01
-            n_train_per_epoch = int(ytrainsize * frac_dataset_per_epoch)
-            n_batches = n_train_per_epoch // batch_size
-            n_val_per_epoch = int(val_samps.shape[0] * frac_dataset_per_epoch)
             if verbose:
                 print(f'Downsampling no. training samples per epoch to {n_train_per_epoch} and no. validation samples per epoch to {n_val_per_epoch}')
         val_batch_size = batch_size
@@ -192,7 +195,7 @@ class NFlow():
                 for i in range(n_val_batches):
                     #calculate flow validation loss
                     unweighted_KL_loss = self.network.log_prob(val_samps_batch[i*val_batch_size:(i + 1)*val_batch_size], conditional=val_conds_batch[i*val_batch_size:(i + 1)*val_batch_size])
-                    weighted_sum += (val_weights_batch[i*val_batch_size:(i + 1)*val_batch_size] * unweighted_KL_loss).mean()
+                    weighted_sum += (val_weights_batch[i*val_batch_size:(i + 1)*val_batch_size] * unweighted_KL_loss.reshape(-1)).mean()
 
                 total_val_loss =  - weighted_sum / n_val_batches
                 #total_unweighted_KL_val = -unweighted_KL_loss.mean().cpu().numpy()
