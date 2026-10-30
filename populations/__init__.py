@@ -753,14 +753,18 @@ class FlowModel(Model):
         models_stack = np.copy(models)
         #map samples with logistic mapping before dividing into training and validation data
         for pidx, param in enumerate(self.param_dict):
-            try:
-                if self.param_dict[param]['transf'] == 'logit':
-                    models_stack[:,pidx], self.param_dict[param]['logit_max'], self.param_dict[param]['max'] = self.logistic(models_stack[:,pidx],\
-                        wholedataset=True, rescale_max=self.param_dict[param]['limits'][1])
-                elif self.param_dict[param]['transf'] == 'tanh':
-                    models_stack[:,pidx] = np.arctanh(models_stack[:,pidx])
-            except:
-                raise KeyError(f'Must specify how to transform {param} with `transf` entry in `event-parameter-dict`.')
+            #try:
+            if self.param_dict[param]['transf'] == 'logit':
+                models_stack[:,pidx], self.param_dict[param]['logit_max'], self.param_dict[param]['max'] = self.logistic(models_stack[:,pidx],\
+                    wholedataset=True, rescale_max=self.param_dict[param]['limits'][1])
+            elif self.param_dict[param]['transf'] == 'tanh':
+                models_stack[:,pidx] = np.arctanh(models_stack[:,pidx])
+            elif self.param_dict[param]['transf'] == 'loglogit':
+                rmax=np.log(self.param_dict[param]['limits'][1])+np.abs(np.min(np.log(models_stack[:,pidx])))+0.001
+                models_stack[:,pidx], self.param_dict[param]['logit_max'], self.param_dict[param]['max'] = self.logistic(np.log(models_stack[:,pidx])+np.abs(np.min(np.log(models_stack[:,pidx])))+0.001,\
+                    wholedataset=True, rescale_max=rmax)
+            #except:
+            #    raise KeyError(f'Must specify how to transform {param} with `transf` entry in `event-parameter-dict`.')
 
         #repeat subpopulation hyperparameter values Nsamps times for each combination of hyperparameter values
         hp_combos = np.squeeze(list(product(*self.hp_vals)))
@@ -806,6 +810,9 @@ class FlowModel(Model):
                 samps[:,pidx] = self.expistic(logit_samps[:,pidx], self.param_dict[param]['logit_max'], self.param_dict[param]['max'])
             elif self.param_dict[param]['transf'] == 'tanh':
                 samps[:,pidx] = np.tanh(logit_samps[:,pidx])
+            elif self.param_dict[param]['transf'] == 'loglogit':
+                bonus_factor = self.param_dict[param]['max'] - np.log(self.param_dict[param]['limits'][1])
+                samps[:,pidx] = np.exp(self.expistic(logit_samps[:,pidx], self.param_dict[param]['logit_max'], self.param_dict[param]['max'])-bonus_factor)
             else:
                 print(f'No transformation type specified for {param} dimension, attempting expistic transform')
                 samps[:,pidx] = self.expistic(logit_samps[:,pidx], self.param_dict[param]['logit_max'], self.param_dict[param]['max'])
@@ -932,6 +939,9 @@ class FlowModel(Model):
                 mapped_data[:,pidx],_,_ = self.logistic(data[:,pidx], False, self.param_dict[param]['logit_max'], self.param_dict[param]['max'])
             elif self.param_dict[param]['transf'] == 'tanh':
                 mapped_data[:,pidx] = np.arctanh(data[:,pidx])
+            elif self.param_dict[param]['transf'] == 'loglogit':
+                mapped_data[:,pidx], _,_ = self.logistic(np.log(mapped_data[:,pidx])+bonus_factor,\
+                    False, self.param_dict[param]['logit_max'], self.param_dict[param]['max'])
             else:
                 print(f'No transformation type specified for {param} dimension, attempting logistic transform')
                 mapped_data[:,pidx],_,_ = self.logistic(data[:,pidx], False, self.param_dict[param]['logit_max'], self.param_dict[param]['max'])
@@ -1065,7 +1075,7 @@ class FlowModel(Model):
 
         #set mapping parameters into channel config
         for param in self.param_dict:
-            if self.param_dict[param]['transf'] == 'logit':
+            if self.param_dict[param]['transf'] == 'logit' or self.param_dict[param]['transf'] == 'loglogit':
                 channel_config[param] = {'logit_max':self.param_dict[param]['logit_max'], 'max':self.param_dict[param]['max']}
 
         channel_json = {}
@@ -1124,7 +1134,7 @@ class FlowModel(Model):
             #load parameter mapings, from config if availble, if not then try mappings.np file
             try:
                 for param in self.param_dict:
-                    if self.param_dict[param]['transf'] == 'logit':
+                    if self.param_dict[param]['transf'] == 'logit' or self.param_dict[param]['transf'] == 'loglogit':
                         for key in ['logit_max', 'max']:
                             self.param_dict[param][key] = config[self.channel_label][param][key]
             except:
