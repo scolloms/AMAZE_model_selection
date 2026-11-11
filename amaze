@@ -34,7 +34,8 @@ def amaze(args):
     helper_functions.ErrorCheckIni(settings)
 
     # --- Create directory for plots and output samples
-    os.makedirs(settings['output-dir'], exist_ok=True)
+    if settings['output-dir'] is not None:
+        os.makedirs(settings['output-dir'], exist_ok=True)
 
     # --- Set random seed either from settings or from arg to amaze script
     if settings['random-seed']:
