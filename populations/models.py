@@ -84,6 +84,12 @@ def get_deepest_models(file_path, channel_dict):
     f.visititems(find_submodels)
     f.close()
     deepest_models = sorted(list(set(deepest_models)))
+
+    # flag identifying popsynth input files which are indexed by hyperparameter indices
+    # rather than nested keys in input file
+    hyperparams_by_indx = False
+    if 'hyperparams' in deepest_models:
+        hyperparams_by_indx = True
     
     # remove models that are not specified in the channel dict
     deepest_models_cut = []
@@ -92,28 +98,35 @@ def get_deepest_models(file_path, channel_dict):
             if chnl+'/' in mdl:
                 deepest_models_cut.append(mdl)
     deepest_models = deepest_models_cut
+    
+    if hyperparams_by_indx == False:
+        #find hyperparameters in models for nested hdf5
+        hyperparam_dict  = {}
+        hyperidx=0
+        deepest_models.sort()
+        # list of model keys
+        hyperparams = sorted(list(set([x.split('/', 1)[1] \
+                                    for x in deepest_models])))
+        # total number of hyperparameters = maximum number of
+        # hyperparameters in any model
+        Nhyper = np.max([len(x.split('/')) for x in hyperparams])
 
-    #find hyperparameters in models
-    hyperparam_dict  = {}
-    hyperidx=0
-    deepest_models.sort()
-    # list of model keys
-    hyperparams = sorted(list(set([x.split('/', 1)[1] \
-                                   for x in deepest_models])))
-    # total number of hyperparameters = maximum number of
-    # hyperparameters in any model
-    Nhyper = np.max([len(x.split('/')) for x in hyperparams])
-
-    while hyperidx < Nhyper:
-        hyperidx_with_Nhyper = np.argwhere(np.asarray([len(x.split('/')) \
-                for x in hyperparams])>hyperidx).flatten()
-        hyperparams_at_level = sorted(set([x.split('/')[hyperidx] \
-                for x in np.asarray(hyperparams)[hyperidx_with_Nhyper]]))
-        hyperparam_dict[hyperidx] = hyperparams_at_level
-        hyperidx += 1
-    # length of the hyperparam dict for each dimension
-    hyperparam_pts_per_dim = [len(hyperparam_dict[x]) for x in range(Nhyper)]
-    return deepest_models, hyperparam_pts_per_dim
+        while hyperidx < Nhyper:
+            hyperidx_with_Nhyper = np.argwhere(np.asarray([len(x.split('/')) \
+                    for x in hyperparams])>hyperidx).flatten()
+            hyperparams_at_level = sorted(set([x.split('/')[hyperidx] \
+                    for x in np.asarray(hyperparams)[hyperidx_with_Nhyper]]))
+            hyperparam_dict[hyperidx] = hyperparams_at_level
+            hyperidx += 1
+        # length of the hyperparam dict for each dimension
+        hyperparam_pts_per_dim = [len(hyperparam_dict[x]) for x in range(Nhyper)]
+    else:
+        hyperparam_idxs = sorted(list(set([x.split('/', 1)[1] \
+                                    for x in deepest_models])))
+        hyperparams = pd.read_hdf(file_path, key='hyperparams')
+        Nhyper = hyperparams.shape[1]
+        hyperparam_pts_per_dim = [hyperparams.shape[0] for dim in range(Nhyper)]
+    return deepest_models, hyperparam_pts_per_dim, hyperparams_by_indx
 
 def get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim):
 
@@ -174,18 +187,25 @@ def get_models(file_path, channel_dict, param_dict, \
     flow_models : dictionary of flows for each formation channel
     """
 
-    deepest_models, hyperparam_pts_per_dim = get_deepest_models(file_path, channel_dict)
+    deepest_models, hyperparam_pts_per_dim, hyperparams_by_indx = get_deepest_models(file_path, channel_dict)
+    
+    if hyperparams_by_indx==True:
+        #read in values for hyperparams stored via index
+        hyperparams = pd.read_hdf(file_path, key='hyperparams')
+        
     # Flow case: reads in samples from all channels and sends to FlowModel
     if use_flows==True:
         flow_models = {}
         for i, chnl in enumerate(tqdm(channel_dict.keys())):
-            channel_smdls, smdl_indxs_combos = get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim)
+            channel_smdls, smdl_indxs_combos =  get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim)
 
             #finds hyperparams specific to channel assuming hyperparam_dict contains values and keys:
             channel_hyperparams = {}
             for hp in hyperparam_dict:
                 if hp in channel_dict[chnl]['parameters']:
                     channel_hyperparams[hp] = hyperparam_dict[hp]
+                    if hyperparams_by_indx==True:
+                        channel_hyperparams[hp]['values'] = {hp_idx: hyperparams[hp][hp_idx].item() for hp_idx in hyperparams.index}
 
             popsynth_outputs = read_hdf5(file_path, chnl, channel_smdls, smdl_indxs_combos, param_dict, kwargs['spinmag'])
             flow_models[chnl] = FlowModel.from_samples(chnl, \
@@ -195,7 +215,8 @@ def get_models(file_path, channel_dict, param_dict, \
                 smdl_indxs_combos, \
                 sensitivity=sensitivity,
                 multisensitivity=multisensitivity,
-                deteff_model_path=deteff_model_path)
+                deteff_model_path=deteff_model_path,\
+                hps_by_indx=hyperparams_by_indx)
         return deepest_models, flow_models
     #KDE case: reads in submodel for each of the deepest model and sends to KDEModel
     else:
