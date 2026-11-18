@@ -95,7 +95,7 @@ def get_deepest_models(file_path, channel_dict):
     deepest_models_cut = []
     for chnl in channel_dict.keys():
         for mdl in deepest_models:
-            if chnl+'/' in mdl:
+            if chnl == mdl.split('/')[0]:
                 deepest_models_cut.append(mdl)
     deepest_models = deepest_models_cut
     
@@ -132,7 +132,7 @@ def get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim):
 
     # find submodel keys, and indices they should correspond to
     #   in the input samples dict to the FlowModel
-    channel_smdls = [x for x in deepest_models if chnl+'/' in x]
+    channel_smdls = [x for x in deepest_models if x.split('/')[0] == chnl]
     channel_smdls_split = np.array([x.split('/')[1:] \
                 for x in deepest_models if chnl+'/' in x])
     smdl_indices = [list(np.arange(hyperparam_pts_per_dim[i])) \
@@ -247,5 +247,4 @@ def get_models(file_path, channel_dict, param_dict, \
 
                 current_level = current_level[part]
         return deepest_models, kde_models
-            
-
+        
