@@ -666,8 +666,9 @@ class FlowModel(Model):
                 self.hp_vals.append(list(np.log(list(channel_hyperparams[hp]['values'].values()))))
             else:
                 self.hp_vals.append(list(channel_hyperparams[hp]['values'].values()))
-                
-        self.hp_vals = np.array(self.hp_vals)
+        
+        if hps_by_indx==True:
+            self.hp_vals = np.array(self.hp_vals)
         self.hps_by_indx = hps_by_indx
 
         #number of binary parameters
@@ -743,7 +744,6 @@ class FlowModel(Model):
             weights_idxs.append(np.argwhere((weights_temp) > np.finfo(np.float32).tiny))
             model_size[i] = np.shape(weights_idxs[i])[0]
             cumulsize[i] = np.sum(model_size)
-        print(model_size)
 
         #initialise array to move samples and weights to
         self.no_binaries = int(cumulsize[-1])
@@ -778,9 +778,6 @@ class FlowModel(Model):
             #repeat subpopulation hyperparameter values Nsamps times for each combination of hyperparameter values, assuming self.hp_vals lies on a grid
             hp_combos = np.squeeze(list(product(*self.hp_vals)))
         hps_stack = np.repeat(hp_combos, (model_size).astype(int), axis=0)
-        print(hps_stack)
-        print(hps_stack.shape)
-
 
         #reshape conditionals and weights
         hps_stack = np.reshape(hps_stack,(-1,self.conditionals))
@@ -1000,7 +997,7 @@ class FlowModel(Model):
 
         #scales the distribution in logistic space, so that the samples can have spread O(1), easier for flow to learn
         if wholedataset:
-            max = np.max(logit_data)
+            max = np.max(np.abs([np.max(logit_data),np.min(logit_data)]))
         else:
             max = max
         logit_data /= max
