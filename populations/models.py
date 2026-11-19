@@ -58,7 +58,9 @@ def read_hdf5(path, channel, channel_smdl_names, smdl_indxs_combos, param_dict, 
     popsynth_outputs = {}
     #error handling for model keys for Nhyper>1, to set these to tuple type
     for i, channel_smdl_name in enumerate(channel_smdl_names):
-        if smdl_indxs_combos[i].ndim > 0:
+        if len(channel_smdl_names)==1:
+            dict_key = tuple(smdl_indxs_combos[i])
+        elif smdl_indxs_combos[i].ndim > 0:
             dict_key = tuple(smdl_indxs_combos[i])
         else:
             dict_key = smdl_indxs_combos[i]
@@ -70,7 +72,7 @@ def read_hdf5(path, channel, channel_smdl_names, smdl_indxs_combos, param_dict, 
         popsynth_outputs[dict_key] 
     return(popsynth_outputs)
 
-def get_deepest_models(file_path, channel_dict):
+def get_deepest_models(file_path, channel_dict, hyperparam_dict):
 
     # all models should be saved in 'file_path' in a hierarchical structure, 
     #   with the channel being the top group
@@ -85,13 +87,27 @@ def get_deepest_models(file_path, channel_dict):
     f.close()
     deepest_models = sorted(list(set(deepest_models)))
     
-    # remove models that are not specified in the channel dict
+    # remove models that are not specified in the channel dict or population param dict
     deepest_models_cut = []
     for chnl in channel_dict.keys():
         for mdl in deepest_models:
             if chnl+'/' in mdl:
                 deepest_models_cut.append(mdl)
     deepest_models = deepest_models_cut
+
+    deepest_models_copy = copy.deepcopy(deepest_models)
+    #if specifying certain hyperparameter values in hyperparameter dict, remove those values from the found deepest_models
+    for hp_idx, hyperparam in enumerate(hyperparam_dict.keys()):
+        if 'values' in hyperparam_dict[f'{hyperparam}'].keys():
+            requested_smdls = hyperparam_dict[f'{hyperparam}']['values'].keys()
+            for mdl in deepest_models:
+                if mdl.split('/')[hp_idx+1] not in requested_smdls:
+                    try:
+                        print(f'removing {mdl} as not specified in ini file')
+                        deepest_models_copy.remove(mdl)
+                    except:
+                        continue
+    deepest_models=deepest_models_copy
 
     #find hyperparameters in models
     hyperparam_dict  = {}
@@ -125,6 +141,7 @@ def get_channel_smdls(chnl, deepest_models, hyperparam_pts_per_dim):
     smdl_indices = [list(np.arange(hyperparam_pts_per_dim[i])) \
                 for i in range(channel_smdls_split.shape[1])]
     smdl_indxs_combos = np.squeeze(list(product(*smdl_indices)))
+    smdl_indxs_combos = smdl_indxs_combos.reshape(-1,channel_smdls_split.shape[1])
 
     return channel_smdls, smdl_indxs_combos
 
@@ -174,7 +191,7 @@ def get_models(file_path, channel_dict, param_dict, \
     flow_models : dictionary of flows for each formation channel
     """
 
-    deepest_models, hyperparam_pts_per_dim = get_deepest_models(file_path, channel_dict)
+    deepest_models, hyperparam_pts_per_dim = get_deepest_models(file_path, channel_dict, hyperparam_dict)
     # Flow case: reads in samples from all channels and sends to FlowModel
     if use_flows==True:
         flow_models = {}

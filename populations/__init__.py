@@ -591,7 +591,9 @@ class FlowModel(Model):
 
         for model_idxs in model_keys:
             #grab samples for each submodel according to key in samples dict
-            if model_idxs.ndim > 0:
+            if len(model_keys)==1:
+                dict_key = tuple(model_idxs)
+            elif model_idxs.ndim > 0:
                 dict_key = tuple(model_idxs)
             else:
                 dict_key = model_idxs
@@ -768,6 +770,7 @@ class FlowModel(Model):
 
         #repeat subpopulation hyperparameter values Nsamps times for each combination of hyperparameter values
         hp_combos = np.squeeze(list(product(*self.hp_vals)))
+        hp_combos = hp_combos.reshape(-1,self.conditionals)
         hps_stack = np.repeat(hp_combos, (model_size).astype(int), axis=0)
 
         #reshape conditionals and weights
