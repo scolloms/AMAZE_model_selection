@@ -107,12 +107,14 @@ def get_deepest_models(file_path, channel_dict, hyperparam_dict):
         if 'values' in hyperparam_dict[f'{hyperparam}'].keys():
             requested_smdls = hyperparam_dict[f'{hyperparam}']['values'].keys()
             for mdl in deepest_models:
-                if mdl.split('/')[hp_idx+1] not in requested_smdls:
-                    try:
-                        print(f'removing {mdl} as not specified in ini file')
-                        deepest_models_copy.remove(mdl)
-                    except:
-                        continue
+                print(mdl.split('/'))
+                if hp_idx+1 <= hp_idx:
+                    if mdl.split('/')[hp_idx+1] not in requested_smdls:
+                        try:
+                            print(f'removing {mdl} as not specified in ini file')
+                            deepest_models_copy.remove(mdl)
+                        except:
+                            continue
     deepest_models=deepest_models_copy
 
     if hyperparams_by_indx == False:
